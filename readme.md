@@ -164,6 +164,7 @@ async onError(input: I, error: Error, ctx: StepHookContext, signal: AbortSignal)
 | `listen()` | Connect DB/Redis, migrate schema, leader cold-reconcile if needed, start workers |
 | `startWorkers()` | Start workers after `listen({ deferWorkers: true })` |
 | `runWorkflow(name, input)` | Start a workflow run |
+| `abortWorkflow(workflowRunId, reason?)` | Cancel a running workflow (`cancelled` status) |
 | `getWorkflowRun(id)` | Fetch workflow run state (Postgres) |
 | `getStepExecutions(workflowRunId)` | List step executions (Postgres) |
 | `health()` | `{ postgres, redis, workers }` for **this instance** |

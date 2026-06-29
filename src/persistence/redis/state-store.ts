@@ -29,6 +29,7 @@ import {
     ACQUIRE_RUN_LOCK_SCRIPT,
     CLAIM_STEP_SCRIPT,
     COMPLETE_RUN_SCRIPT,
+    CANCEL_RUN_SCRIPT,
     CREATE_STEP_SCRIPT,
     DECR_JOIN_SCRIPT,
     FAIL_RUN_SCRIPT,
@@ -323,6 +324,20 @@ export class RedisStateStore implements IStateStore {
         return this.loadStep(stepExecId);
     }
 
+    async cancelStep(stepExecId: string, reason?: string): Promise<StepExecutionRecord | null> {
+        const row = await this.loadStep(stepExecId);
+        if (!row) return null;
+
+        const now = this.nowIso();
+        await this.applyTerminalTransition(row, StepExecutionStatus.CANCELLED, now, {
+            output: EMPTY,
+            error: encodeJson(reason ? { reason } : null),
+            finished_at: now,
+        });
+
+        return this.loadStep(stepExecId);
+    }
+
     private async applyTerminalTransition(
         row: StepExecutionRecord,
         status: StepExecutionStatus,
@@ -331,7 +346,8 @@ export class RedisStateStore implements IStateStore {
     ): Promise<void> {
         if (
             row.status === StepExecutionStatus.COMPLETED ||
-            row.status === StepExecutionStatus.FAILED
+            row.status === StepExecutionStatus.FAILED ||
+            row.status === StepExecutionStatus.CANCELLED
         ) {
             return;
         }
@@ -471,6 +487,22 @@ export class RedisStateStore implements IStateStore {
         return rows;
     }
 
+    async listStepsForRun(workflowRunId: string): Promise<StepExecutionRecord[]> {
+        return this.getStepsForRun(workflowRunId);
+    }
+
+    async markAbortRequested(workflowRunId: string): Promise<void> {
+        await this.redis.send("HSET", [runKey(workflowRunId), "abort_requested", "1"]);
+    }
+
+    async isAbortRequested(workflowRunId: string): Promise<boolean> {
+        const flag = (await this.redis.send("HGET", [
+            runKey(workflowRunId),
+            "abort_requested",
+        ])) as string | null;
+        return flag === "1";
+    }
+
     async recomputeRunActiveCount(workflowRunId: string): Promise<number> {
         const steps = await this.getStepsForRun(workflowRunId);
         const activeStatuses = new Set([
@@ -535,6 +567,18 @@ export class RedisStateStore implements IStateStore {
         const output = encodeJson(reason ? { reason } : null);
         const result = (await this.redis.send("EVAL", [
             FAIL_RUN_SCRIPT,
+            "1",
+            runKey(workflowRunId),
+            this.nowIso(),
+            output,
+        ])) as number;
+        return result > 0 ? result : null;
+    }
+
+    async tryCancelRun(workflowRunId: string, reason?: string): Promise<number | null> {
+        const output = encodeJson(reason ? { reason } : null);
+        const result = (await this.redis.send("EVAL", [
+            CANCEL_RUN_SCRIPT,
             "1",
             runKey(workflowRunId),
             this.nowIso(),

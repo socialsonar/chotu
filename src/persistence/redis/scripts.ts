@@ -62,7 +62,7 @@ local stepKey = KEYS[2]
 local stepExecId = ARGV[1]
 redis.call('LREM', inflightKey, 1, stepExecId)
 local status = redis.call('HGET', stepKey, 'status')
-if status == 'pending' or status == 'completed' or status == 'failed' or status == 'waiting' then
+if status == 'pending' or status == 'completed' or status == 'failed' or status == 'cancelled' or status == 'waiting' then
   redis.call('HSET', stepKey, 'queued', '0')
 end
 return 1
@@ -256,6 +256,32 @@ local output = ARGV[2]
 local version = redis.call('HINCRBY', runKey, 'version', 1)
 redis.call('HSET', runKey, 'status', 'failed', 'output', output, 'updated_at', now, 'finished_at', now, 'version', tostring(version))
 return version
+`;
+
+export const CANCEL_RUN_SCRIPT = `
+local runKey = KEYS[1]
+local status = redis.call('HGET', runKey, 'status')
+local activeCount = tonumber(redis.call('HGET', runKey, 'active_count') or '0')
+if status ~= 'running' or activeCount > 0 then return 0 end
+local now = ARGV[1]
+local output = ARGV[2]
+local version = redis.call('HINCRBY', runKey, 'version', 1)
+redis.call('HSET', runKey, 'status', 'cancelled', 'output', output, 'updated_at', now, 'finished_at', now, 'abort_requested', '0', 'version', tostring(version))
+return version
+`;
+
+export const CANCEL_FROM_QUEUE_SCRIPT = `
+local inflightKey = KEYS[1]
+local wfListKey = KEYS[2]
+local stepKey = KEYS[3]
+local stepExecId = ARGV[1]
+redis.call('LREM', inflightKey, 1, stepExecId)
+redis.call('LREM', wfListKey, 0, stepExecId)
+local status = redis.call('HGET', stepKey, 'status')
+if status == 'pending' or status == 'completed' or status == 'failed' or status == 'cancelled' or status == 'waiting' then
+  redis.call('HSET', stepKey, 'queued', '0')
+end
+return 1
 `;
 
 export const ACQUIRE_RUN_LOCK_SCRIPT = `

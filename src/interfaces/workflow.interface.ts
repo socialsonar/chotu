@@ -2,6 +2,7 @@ export enum WorkflowRunStatus {
     RUNNING = "running",
     COMPLETED = "completed",
     FAILED = "failed",
+    CANCELLED = "cancelled",
 }
 
 export enum StepExecutionStatus {
@@ -10,6 +11,7 @@ export enum StepExecutionStatus {
     COMPLETED = "completed",
     FAILED = "failed",
     WAITING = "waiting",
+    CANCELLED = "cancelled",
 }
 
 export interface WorkflowCompleteInput<I = unknown> {

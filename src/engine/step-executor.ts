@@ -57,14 +57,21 @@ export class StepExecutor {
 
         try {
             const execute = async () => {
+                await this.throwIfRunAborted(row.workflow_run_id);
                 this.throwIfAborted(shutdownSignal);
                 await step.onBeforeRun(input, ctx, stepSignal);
+                await this.throwIfRunAborted(row.workflow_run_id);
                 this.throwIfAborted(shutdownSignal);
                 const output = await step.run(input, stepSignal);
+                await this.throwIfRunAborted(row.workflow_run_id);
                 this.throwIfAborted(shutdownSignal);
                 await step.onAfterRun(input, output, ctx, stepSignal);
 
                 const nextSteps = await step.getNextSteps(input, output, stepSignal);
+
+                if (!(await this.lifecycle.canScheduleForRun(row.workflow_run_id))) {
+                    return;
+                }
 
                 await this.lifecycle.completeStep(stepExecId, output);
 
@@ -101,10 +108,19 @@ export class StepExecutor {
             return false;
         } catch (err) {
             if (shutdownSignal.aborted) {
+                if (await this.lifecycle.isAbortRequested(row.workflow_run_id)) {
+                    await this.lifecycle.cancelStep(stepExecId, row);
+                    return false;
+                }
                 if (await this.lifecycle.setStepStatus(stepExecId, StepExecutionStatus.PENDING)) {
                     await this.fairQueue.requeue(row.queue, stepExecId, row.workflow_run_id);
                 }
                 return true;
+            }
+
+            if (await this.lifecycle.isAbortRequested(row.workflow_run_id)) {
+                await this.lifecycle.cancelStep(stepExecId, row);
+                return false;
             }
 
             const error = err instanceof Error ? err : new Error(String(err));
@@ -166,6 +182,14 @@ export class StepExecutor {
 
     throwIfAborted(signal: AbortSignal): void {
         if (signal.aborted) {
+            const err = new Error("Aborted");
+            err.name = "AbortError";
+            throw err;
+        }
+    }
+
+    private async throwIfRunAborted(workflowRunId: string): Promise<void> {
+        if (await this.lifecycle.isAbortRequested(workflowRunId)) {
             const err = new Error("Aborted");
             err.name = "AbortError";
             throw err;
@@ -249,5 +273,19 @@ export class StepExecutor {
             workflowName: runRow?.workflow_name ?? "unknown",
             attempt: row.attempts + 1,
         };
+    }
+
+    async handleAbortedStep(row: StepExecutionRecord): Promise<void> {
+        if (!(await this.lifecycle.isAbortRequested(row.workflow_run_id))) return;
+
+        const active = new Set([
+            StepExecutionStatus.PENDING,
+            StepExecutionStatus.RUNNING,
+            StepExecutionStatus.WAITING,
+        ]);
+        if (!active.has(row.status)) return;
+
+        await this.fairQueue.cancelFromQueue(row.queue, row.id, row.workflow_run_id);
+        await this.lifecycle.cancelStep(row.id, row);
     }
 }

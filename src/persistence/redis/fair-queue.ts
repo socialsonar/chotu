@@ -11,6 +11,7 @@ import {
 } from "./keys";
 import {
     ACK_INFLIGHT_SCRIPT,
+    CANCEL_FROM_QUEUE_SCRIPT,
     FAIR_ENQUEUE_SCRIPT,
     FAIR_POP_SCRIPT,
     RATE_LIMIT_SCRIPT,
@@ -85,6 +86,21 @@ export class RedisFairQueue implements IFairQueue {
                 await Bun.sleep(100 * (attempt + 1));
             }
         }
+    }
+
+    async cancelFromQueue(
+        queueName: string,
+        stepExecId: string,
+        workflowRunId: string,
+    ): Promise<void> {
+        await this.redis.send("EVAL", [
+            CANCEL_FROM_QUEUE_SCRIPT,
+            "3",
+            inflightKey(queueName),
+            queueWfKey(queueName, workflowRunId),
+            stepKey(stepExecId),
+            stepExecId,
+        ]);
     }
 
     async acquireRateLimit(queue: QueueConfig): Promise<boolean> {

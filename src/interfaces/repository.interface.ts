@@ -31,7 +31,7 @@ export interface IWorkflowRepository {
     }): Promise<void>;
     syncStepTerminal(params: {
         id: string;
-        status: StepExecutionStatus.COMPLETED | StepExecutionStatus.FAILED;
+        status: StepExecutionStatus.COMPLETED | StepExecutionStatus.FAILED | StepExecutionStatus.CANCELLED;
         output?: Record<string, any> | null;
         error?: Record<string, any> | null;
         version: number;
@@ -44,7 +44,7 @@ export interface IWorkflowRepository {
     syncJoinRemaining(id: string, remaining: number): Promise<void>;
     syncWorkflowTerminal(params: {
         id: string;
-        status: WorkflowRunStatus.COMPLETED | WorkflowRunStatus.FAILED;
+        status: WorkflowRunStatus.COMPLETED | WorkflowRunStatus.FAILED | WorkflowRunStatus.CANCELLED;
         output: Record<string, any> | null;
         version: number;
     }): Promise<boolean>;

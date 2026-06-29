@@ -57,6 +57,14 @@ export class ChotuEngine {
         return this.lifecycle.getStepExecutions(workflowRunId);
     }
 
+    async abortWorkflow(workflowRunId: string, reason?: string): Promise<boolean> {
+        const started = await this.lifecycle.beginCancelWorkflow(workflowRunId, reason);
+        if (!started) return false;
+        this.workerPool.abortInFlightForRun(workflowRunId);
+        await this.lifecycle.finalizeCancelIfReady(workflowRunId, reason);
+        return true;
+    }
+
     async recoverStaleRunningSteps(): Promise<number> {
         return this.recovery.recoverStaleRunningSteps();
     }

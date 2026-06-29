@@ -30,11 +30,21 @@ export interface StepFailedContext extends StepHookContext {
     willRetry: boolean;
 }
 
+export interface WorkflowCancelledContext extends WorkflowHookContext {
+    reason?: string;
+}
+
+export interface StepCancelledContext extends StepHookContext {
+    reason?: string;
+}
+
 export interface ChotuHooks {
     onWorkflowStarted?(ctx: WorkflowHookContext): Promise<void> | void;
     onWorkflowCompleted?(ctx: WorkflowCompletedContext): Promise<void> | void;
     onWorkflowError?(ctx: WorkflowErrorContext): Promise<void> | void;
+    onWorkflowCancelled?(ctx: WorkflowCancelledContext): Promise<void> | void;
     onStepStarted?(ctx: StepHookContext): Promise<void> | void;
     onStepCompleted?(ctx: StepCompletedContext): Promise<void> | void;
     onStepFailed?(ctx: StepFailedContext): Promise<void> | void;
+    onStepCancelled?(ctx: StepCancelledContext): Promise<void> | void;
 }

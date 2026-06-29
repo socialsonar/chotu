@@ -2,7 +2,7 @@ import type { RedisClient } from "bun";
 import type { IFairQueue } from "../interfaces/fair-queue.interface";
 import type { IWorkflowRepository } from "../interfaces/repository.interface";
 import type { IStateStore } from "../interfaces/state-store.interface";
-import { StepExecutionStatus } from "../interfaces/workflow.interface";
+import { StepExecutionStatus, WorkflowRunStatus } from "../interfaces/workflow.interface";
 import type { ChotuLogger } from "../logger";
 import { inflightKey, STARTUP_RECONCILE_KEY } from "../persistence/redis/keys";
 import { StepRegistry } from "./step-registry";
@@ -89,6 +89,7 @@ export class RecoveryService {
         for (const stepExecId of stepIds) {
             const row = await this.lifecycle.loadStep(stepExecId);
             if (!row || row.status !== StepExecutionStatus.RUNNING) continue;
+            if (await this.shouldSkipRun(row.workflow_run_id)) continue;
             if (row.lease_until > Date.now()) continue;
 
             const reset = await this.stateStore.resetExpiredLease(stepExecId);
@@ -124,6 +125,11 @@ export class RecoveryService {
                     continue;
                 }
 
+                if (await this.shouldSkipRun(row.workflow_run_id)) {
+                    await this.fairQueue.ack(queueName, stepExecId);
+                    continue;
+                }
+
                 if (row.status === StepExecutionStatus.PENDING) {
                     await this.fairQueue.requeue(queueName, stepExecId, row.workflow_run_id);
                     recovered++;
@@ -140,6 +146,7 @@ export class RecoveryService {
                 if (
                     row.status === StepExecutionStatus.COMPLETED ||
                     row.status === StepExecutionStatus.FAILED ||
+                    row.status === StepExecutionStatus.CANCELLED ||
                     row.status === StepExecutionStatus.WAITING ||
                     row.status === StepExecutionStatus.RUNNING
                 ) {
@@ -162,6 +169,7 @@ export class RecoveryService {
         for (const stepExecId of stepIds) {
             const row = await this.lifecycle.loadStep(stepExecId);
             if (!row || row.status !== StepExecutionStatus.PENDING) continue;
+            if (await this.shouldSkipRun(row.workflow_run_id)) continue;
             if (row.queued) continue;
             if (
                 await this.fairQueue.isStepInAnyInflight(stepExecId, this.registry.queueNames())
@@ -214,6 +222,8 @@ export class RecoveryService {
         queueName: string,
         workflowRunId: string,
     ): Promise<boolean> {
+        if (await this.shouldSkipRun(workflowRunId)) return false;
+
         const step = await this.lifecycle.loadStep(stepExecId);
         if (
             step?.status === StepExecutionStatus.PENDING &&
@@ -224,5 +234,11 @@ export class RecoveryService {
             return true;
         }
         return false;
+    }
+
+    private async shouldSkipRun(workflowRunId: string): Promise<boolean> {
+        if (await this.stateStore.isAbortRequested(workflowRunId)) return true;
+        const status = await this.stateStore.getRunStatus(workflowRunId);
+        return status !== WorkflowRunStatus.RUNNING;
     }
 }

@@ -1,8 +1,10 @@
 import type {
     ChotuHooks,
+    StepCancelledContext,
     StepCompletedContext,
     StepFailedContext,
     StepHookContext,
+    WorkflowCancelledContext,
     WorkflowCompletedContext,
     WorkflowErrorContext,
     WorkflowHookContext,
@@ -27,6 +29,10 @@ export class ChotuHookRunner {
         await this.invoke("onWorkflowError", () => this.hooks?.onWorkflowError?.(ctx));
     }
 
+    async workflowCancelled(ctx: WorkflowCancelledContext): Promise<void> {
+        await this.invoke("onWorkflowCancelled", () => this.hooks?.onWorkflowCancelled?.(ctx));
+    }
+
     async stepStarted(ctx: StepHookContext): Promise<void> {
         await this.invoke("onStepStarted", () => this.hooks?.onStepStarted?.(ctx));
     }
@@ -37,6 +43,10 @@ export class ChotuHookRunner {
 
     async stepFailed(ctx: StepFailedContext): Promise<void> {
         await this.invoke("onStepFailed", () => this.hooks?.onStepFailed?.(ctx));
+    }
+
+    async stepCancelled(ctx: StepCancelledContext): Promise<void> {
+        await this.invoke("onStepCancelled", () => this.hooks?.onStepCancelled?.(ctx));
     }
 
     private async invoke(name: string, fn: () => Promise<void> | void | undefined): Promise<void> {

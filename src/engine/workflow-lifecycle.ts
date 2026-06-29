@@ -166,6 +166,11 @@ export class WorkflowLifecycle {
         row: StepExecutionRecord,
         error: Error,
     ): Promise<void> {
+        if (await this.isAbortRequested(row.workflow_run_id)) {
+            await this.cancelStep(stepExecId, row);
+            return;
+        }
+
         const updated = await this.stateStore.failStep(stepExecId, { message: error.message });
         if (!updated) return;
 
@@ -191,12 +196,140 @@ export class WorkflowLifecycle {
         );
     }
 
+    async cancelStep(
+        stepExecId: string,
+        row: StepExecutionRecord,
+        reason?: string,
+    ): Promise<void> {
+        const updated = await this.stateStore.cancelStep(stepExecId, reason);
+        if (!updated) return;
+
+        await syncWithRetry(
+            () =>
+                this.repository.syncStepTerminal({
+                    id: stepExecId,
+                    status: StepExecutionStatus.CANCELLED,
+                    error: reason ? { reason } : null,
+                    version: updated.version,
+                }),
+            `syncStepTerminal(cancelled, ${stepExecId})`,
+            this.logger,
+        );
+
+        const runRow = await this.stateStore.loadRun(row.workflow_run_id);
+        if (runRow) {
+            await this.hookRunner.stepCancelled({
+                stepExecId,
+                stepName: row.step_name,
+                queue: row.queue,
+                workflowRunId: row.workflow_run_id,
+                workflowName: runRow.workflow_name,
+                attempt: row.attempts + 1,
+                reason,
+            });
+        }
+
+        if (row.join_step_id && row.fan_out_index != null) {
+            await this.decrementJoinRemaining(row.join_step_id, row.workflow_run_id);
+        }
+
+        await this.finalizeCancelIfReady(row.workflow_run_id, reason);
+        this.logger.info(
+            `[chotu] Step ${stepExecId} cancelled (workflow ${row.workflow_run_id})`,
+        );
+    }
+
+    async isAbortRequested(workflowRunId: string): Promise<boolean> {
+        return this.stateStore.isAbortRequested(workflowRunId);
+    }
+
+    async canScheduleForRun(workflowRunId: string): Promise<boolean> {
+        const status = await this.stateStore.getRunStatus(workflowRunId);
+        if (status !== WorkflowRunStatus.RUNNING) return false;
+        if (await this.isAbortRequested(workflowRunId)) return false;
+        return true;
+    }
+
+    async beginCancelWorkflow(workflowRunId: string, reason?: string): Promise<boolean> {
+        const run = await this.stateStore.loadRun(workflowRunId);
+        if (!run) return false;
+        if (run.status !== WorkflowRunStatus.RUNNING) return false;
+        if (await this.isAbortRequested(workflowRunId)) return false;
+
+        await this.stateStore.markAbortRequested(workflowRunId);
+
+        const steps = await this.stateStore.listStepsForRun(workflowRunId);
+        const cancellable = new Set([
+            StepExecutionStatus.PENDING,
+            StepExecutionStatus.WAITING,
+        ]);
+
+        for (const step of steps) {
+            if (!cancellable.has(step.status)) continue;
+
+            await this.fairQueue.cancelFromQueue(step.queue, step.id, workflowRunId);
+            await this.cancelStep(step.id, step, reason);
+        }
+
+        return true;
+    }
+
+    async finalizeCancelIfReady(workflowRunId: string, reason?: string): Promise<boolean> {
+        if (!(await this.isAbortRequested(workflowRunId))) return false;
+
+        const activeCount = await this.stateStore.getActiveCount(workflowRunId);
+        if (activeCount > 0) return false;
+
+        await this.finalizeCancelledRun(workflowRunId, reason);
+        return true;
+    }
+
+    private async finalizeCancelledRun(workflowRunId: string, reason?: string): Promise<void> {
+        const output = reason ? { reason } : null;
+        const version = await this.stateStore.tryCancelRun(workflowRunId, reason);
+        if (version == null) return;
+
+        await syncWithRetry(
+            async () => {
+                const synced = await this.repository.syncWorkflowTerminal({
+                    id: workflowRunId,
+                    status: WorkflowRunStatus.CANCELLED,
+                    output,
+                    version,
+                });
+                if (!synced) {
+                    throw new Error(
+                        `syncWorkflowTerminal(cancelled) returned false for ${workflowRunId}`,
+                    );
+                }
+            },
+            `syncWorkflowTerminal(cancelled, ${workflowRunId})`,
+            this.logger,
+        );
+
+        this.logger.info(
+            `[chotu] Workflow run ${workflowRunId} cancelled${reason ? `: ${reason}` : ""}`,
+        );
+
+        const runRow = await this.stateStore.loadRun(workflowRunId);
+        if (runRow) {
+            await this.hookRunner.workflowCancelled({
+                workflowRunId,
+                workflowName: runRow.workflow_name,
+                input: runRow.input,
+                reason,
+            });
+        }
+    }
+
     async scheduleNext(
         nextSteps: "END" | NextStep<any> | ParallelSpec,
         workflowRunId: string,
         currentStepExecId: string,
         stepOutput?: Record<string, any>,
     ): Promise<void> {
+        if (!(await this.canScheduleForRun(workflowRunId))) return;
+
         const currentRow = await this.loadStep(currentStepExecId);
         if (!currentRow) return;
 
@@ -243,11 +376,18 @@ export class WorkflowLifecycle {
         stepName: string,
         workflowRunId: string,
     ): Promise<void> {
+        if (!(await this.canScheduleForRun(workflowRunId))) return;
+
         const queueName = this.registry.resolveQueue(stepName);
         await this.fairQueue.enqueueWithRetry(stepExecId, queueName, workflowRunId);
     }
 
     async decrementJoinRemaining(joinStepId: string, workflowRunId: string): Promise<void> {
+        if (!(await this.canScheduleForRun(workflowRunId))) {
+            await this.finalizeCancelIfReady(workflowRunId);
+            return;
+        }
+
         const remaining = await this.stateStore.decrementJoinRemaining(joinStepId);
         if (remaining == null) return;
 
@@ -262,6 +402,11 @@ export class WorkflowLifecycle {
     }
 
     async finalizeJoin(joinStepId: string, workflowRunId: string): Promise<void> {
+        if (!(await this.canScheduleForRun(workflowRunId))) {
+            await this.finalizeCancelIfReady(workflowRunId);
+            return;
+        }
+
         const joinRow = await this.loadStep(joinStepId);
         if (!joinRow) {
             this.logger.error(
@@ -352,6 +497,12 @@ export class WorkflowLifecycle {
         joinTotal?: number | null;
         joinRemaining?: number | null;
     }): Promise<string> {
+        if (!(await this.canScheduleForRun(params.workflowRunId))) {
+            throw new Error(
+                `[chotu] Cannot create step for non-running workflow ${params.workflowRunId}`,
+            );
+        }
+
         const id = crypto.randomUUID();
         const status = params.status ?? StepExecutionStatus.PENDING;
 
@@ -436,8 +587,14 @@ export class WorkflowLifecycle {
 
         if (
             runStatus === WorkflowRunStatus.COMPLETED ||
-            runStatus === WorkflowRunStatus.FAILED
+            runStatus === WorkflowRunStatus.FAILED ||
+            runStatus === WorkflowRunStatus.CANCELLED
         ) {
+            return;
+        }
+
+        if (await this.isAbortRequested(workflowRunId)) {
+            await this.finalizeCancelIfReady(workflowRunId);
             return;
         }
 

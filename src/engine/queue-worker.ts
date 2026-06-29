@@ -17,6 +17,7 @@ export class QueueWorkerPool {
     private readonly inFlightStepNames = new Map<string, string>();
     private lastRecoveryAt = 0;
     private readonly abortControllers = new Map<string, AbortController>();
+    private readonly inFlightRunIds = new Map<string, string>();
 
     constructor(
         private readonly fairQueue: IFairQueue,
@@ -62,6 +63,15 @@ export class QueueWorkerPool {
         this.inFlight.clear();
         this.inFlightStepNames.clear();
         this.abortControllers.clear();
+        this.inFlightRunIds.clear();
+    }
+
+    abortInFlightForRun(workflowRunId: string): void {
+        for (const [stepExecId, runId] of this.inFlightRunIds) {
+            if (runId !== workflowRunId) continue;
+            const controller = this.abortControllers.get(stepExecId);
+            controller?.abort(new Error("workflow abort"));
+        }
     }
 
     private async runWorker(queue: QueueConfig): Promise<void> {
@@ -87,6 +97,21 @@ export class QueueWorkerPool {
                 const row = await this.stepExecutor.loadStep(stepExecId);
                 if (!row) {
                     this.logger.warn(`[chotu] Step execution ${stepExecId} not found after pop`);
+                    await this.fairQueue.ack(queue.name, stepExecId);
+                    continue;
+                }
+
+                if (
+                    row.status === StepExecutionStatus.CANCELLED ||
+                    row.status === StepExecutionStatus.COMPLETED ||
+                    row.status === StepExecutionStatus.FAILED
+                ) {
+                    await this.fairQueue.ack(queue.name, stepExecId);
+                    continue;
+                }
+
+                if (await this.stateStore.isAbortRequested(row.workflow_run_id)) {
+                    await this.stepExecutor.handleAbortedStep(row);
                     await this.fairQueue.ack(queue.name, stepExecId);
                     continue;
                 }
@@ -129,6 +154,7 @@ export class QueueWorkerPool {
 
                     const controller = new AbortController();
                     this.abortControllers.set(stepExecId, controller);
+                    this.inFlightRunIds.set(stepExecId, claimed.workflow_run_id);
                     this.inFlightStepIds.add(stepExecId);
                     this.inFlightStepNames.set(stepExecId, claimed.step_name);
 
@@ -158,6 +184,7 @@ export class QueueWorkerPool {
                         this.inFlightStepIds.delete(stepExecId);
                         this.inFlightStepNames.delete(stepExecId);
                         this.abortControllers.delete(stepExecId);
+                        this.inFlightRunIds.delete(stepExecId);
                     }
                 } finally {
                     if (!inflightHandled) {
@@ -185,9 +212,15 @@ export class QueueWorkerPool {
 
     private async runLeaderRecovery(): Promise<void> {
         const steps: Array<() => Promise<void>> = [
-            () => this.recovery.recoverInflightSteps(),
-            () => this.recovery.recoverStaleRunningSteps(),
-            () => this.recovery.recoverOrphanedPendingSteps(),
+            async () => {
+                await this.recovery.recoverInflightSteps();
+            },
+            async () => {
+                await this.recovery.recoverStaleRunningSteps();
+            },
+            async () => {
+                await this.recovery.recoverOrphanedPendingSteps();
+            },
             () => this.recovery.rebuildJoinStateFromRedis(),
         ];
 

@@ -134,7 +134,8 @@ export function toStepExecution(record: StepExecutionRecord): StepExecution {
         updatedAt: new Date(record.updated_at),
         finishedAt:
             record.status === StepExecutionStatus.COMPLETED ||
-            record.status === StepExecutionStatus.FAILED
+            record.status === StepExecutionStatus.FAILED ||
+            record.status === StepExecutionStatus.CANCELLED
                 ? new Date(record.updated_at)
                 : null,
     };

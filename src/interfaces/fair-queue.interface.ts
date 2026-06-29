@@ -11,6 +11,7 @@ export interface IFairQueue {
         workflowRunId: string,
         maxAttempts?: number,
     ): Promise<void>;
+    cancelFromQueue(queueName: string, stepExecId: string, workflowRunId: string): Promise<void>;
     acquireRateLimit(queue: QueueConfig): Promise<boolean>;
     rateLimitBackoffMs(queue: QueueConfig): number;
     isStepInAnyInflight(stepExecId: string, queueNames: Iterable<string>): Promise<boolean>;

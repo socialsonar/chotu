@@ -4,10 +4,12 @@ import ChotuImpl from "./chotu.impl";
 export type { Chotu, ChotuConfig, ChotuHealth } from "./interfaces/chotu.interface";
 export type {
     ChotuHooks,
+    StepCancelledContext,
     StepCompletedContext,
     StepFailedContext,
     StepHookContext,
     WorkflowCompletedContext,
+    WorkflowCancelledContext,
     WorkflowErrorContext,
     WorkflowHookContext,
 } from "./interfaces/hooks.interface";

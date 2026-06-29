@@ -2,8 +2,8 @@ import type { SQL } from "bun";
 import type { ChotuLogger } from "./logger";
 import { defaultLogger } from "./logger";
 
-const WORKFLOW_RUN_STATUS = ["running", "completed", "failed"] as const;
-const STEP_STATUS = ["pending", "running", "completed", "failed", "waiting"] as const;
+const WORKFLOW_RUN_STATUS = ["running", "completed", "failed", "cancelled"] as const;
+const STEP_STATUS = ["pending", "running", "completed", "failed", "waiting", "cancelled"] as const;
 
 const WORKFLOW_RUN_STATUS_CHECK = WORKFLOW_RUN_STATUS.map((s) => `'${s}'`).join(", ");
 const STEP_STATUS_CHECK = STEP_STATUS.map((s) => `'${s}'`).join(", ");
@@ -213,6 +213,53 @@ const migrations: Migration[] = [
                     ON chotu.step_executions (workflow_run_id, step_name)
                     WHERE status IN ('pending', 'running', 'waiting')
                         AND fan_out_index IS NULL
+            `);
+        },
+    },
+    {
+        version: 10,
+        name: "cancelled_status",
+        up: async (sql) => {
+            const workflowConstraints = await sql`
+                SELECT con.conname AS name
+                FROM pg_constraint con
+                JOIN pg_class rel ON rel.oid = con.conrelid
+                JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                WHERE nsp.nspname = 'chotu'
+                    AND rel.relname = 'workflow_runs'
+                    AND con.contype = 'c'
+            `;
+            for (const row of workflowConstraints) {
+                await sql.unsafe(
+                    `ALTER TABLE chotu.workflow_runs DROP CONSTRAINT "${row.name as string}"`,
+                );
+            }
+
+            await sql.unsafe(`
+                ALTER TABLE chotu.workflow_runs
+                    ADD CONSTRAINT workflow_runs_status_check
+                    CHECK (status IN (${WORKFLOW_RUN_STATUS_CHECK}))
+            `);
+
+            const stepConstraints = await sql`
+                SELECT con.conname AS name
+                FROM pg_constraint con
+                JOIN pg_class rel ON rel.oid = con.conrelid
+                JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                WHERE nsp.nspname = 'chotu'
+                    AND rel.relname = 'step_executions'
+                    AND con.contype = 'c'
+            `;
+            for (const row of stepConstraints) {
+                await sql.unsafe(
+                    `ALTER TABLE chotu.step_executions DROP CONSTRAINT "${row.name as string}"`,
+                );
+            }
+
+            await sql.unsafe(`
+                ALTER TABLE chotu.step_executions
+                    ADD CONSTRAINT step_executions_status_check
+                    CHECK (status IN (${STEP_STATUS_CHECK}))
             `);
         },
     },

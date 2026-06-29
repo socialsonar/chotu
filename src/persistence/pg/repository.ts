@@ -134,7 +134,7 @@ export class PgRepository implements IWorkflowRepository {
 
     async syncStepTerminal(params: {
         id: string;
-        status: StepExecutionStatus.COMPLETED | StepExecutionStatus.FAILED;
+        status: StepExecutionStatus.COMPLETED | StepExecutionStatus.FAILED | StepExecutionStatus.CANCELLED;
         output?: Record<string, any> | null;
         error?: Record<string, any> | null;
         version: number;
@@ -192,7 +192,7 @@ export class PgRepository implements IWorkflowRepository {
 
     async syncWorkflowTerminal(params: {
         id: string;
-        status: WorkflowRunStatus.COMPLETED | WorkflowRunStatus.FAILED;
+        status: WorkflowRunStatus.COMPLETED | WorkflowRunStatus.FAILED | WorkflowRunStatus.CANCELLED;
         output: Record<string, any> | null;
         version: number;
     }): Promise<boolean> {

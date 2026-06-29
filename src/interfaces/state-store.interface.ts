@@ -45,6 +45,7 @@ export interface IStateStore {
         output: Record<string, any>,
     ): Promise<StepExecutionRecord | null>;
     failStep(stepExecId: string, error: Record<string, any>): Promise<StepExecutionRecord | null>;
+    cancelStep(stepExecId: string, reason?: string): Promise<StepExecutionRecord | null>;
     finalizeJoinStep(
         joinStepId: string,
         input: Record<string, any>[],
@@ -57,6 +58,10 @@ export interface IStateStore {
         output: Record<string, any> | null,
     ): Promise<number | null>;
     tryFailRun(workflowRunId: string, reason?: string): Promise<number | null>;
+    tryCancelRun(workflowRunId: string, reason?: string): Promise<number | null>;
+    markAbortRequested(workflowRunId: string): Promise<void>;
+    isAbortRequested(workflowRunId: string): Promise<boolean>;
+    listStepsForRun(workflowRunId: string): Promise<StepExecutionRecord[]>;
     acquireRunLock(workflowRunId: string, token: string, ttlSec?: number): Promise<boolean>;
     releaseRunLock(workflowRunId: string, token: string): Promise<void>;
     tryAcquireRecoveryLeader(instanceId: string): Promise<boolean>;
