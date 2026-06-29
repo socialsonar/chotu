@@ -107,7 +107,6 @@ describe.skipIf(!HAS_ENV)("step timeout", () => {
             queues: [{ name: "default", concurrency: 1, maxRetries: 0, pollIntervalMs: 50 }],
             stepQueues: { SlowStep: "default" },
             workflows: [slowWorkflow],
-            leaseTtlMs: 120_000,
             flushIntervalMs: 200,
         });
 
@@ -139,7 +138,6 @@ describe.skipIf(!HAS_ENV)("step timeout", () => {
             queues: [{ name: "default", concurrency: 1, maxRetries: 0, pollIntervalMs: 50 }],
             stepQueues: { FastStep: "default" },
             workflows: [fastWorkflow],
-            leaseTtlMs: 120_000,
             flushIntervalMs: 200,
         });
 
@@ -156,4 +154,57 @@ describe.skipIf(!HAS_ENV)("step timeout", () => {
             resetChotu();
         }
     });
+
+    test("fails step when run exceeds defaultStepTimeoutMs", async () => {
+        class DefaultSlowStep extends Step<{ v: number }, { done: true }> {
+            static stepName = "DefaultSlowStep";
+
+            async run() {
+                await Bun.sleep(300);
+                return { done: true as const };
+            }
+
+            getNextSteps() {
+                return "END" as const;
+            }
+        }
+
+        const defaultSlowWorkflow = defineWorkflow({
+            name: "default-slow-timeout-test",
+            firstStep: DefaultSlowStep,
+            steps: [DefaultSlowStep],
+            terminalSteps: [DefaultSlowStep],
+        });
+
+        resetChotu();
+        const chotu = createChotu({
+            postgresUrl: process.env.POSTGRES_URL!,
+            redisUrl: process.env.REDIS_URL!,
+            defaultStepTimeoutMs: 80,
+            leaseBufferMs: 100,
+            queues: [{ name: "default", concurrency: 1, maxRetries: 0, pollIntervalMs: 50 }],
+            stepQueues: { DefaultSlowStep: "default" },
+            workflows: [defaultSlowWorkflow],
+            flushIntervalMs: 200,
+        });
+
+        try {
+            await chotu.listen();
+            const { id } = await chotu.runWorkflow("default-slow-timeout-test", { v: 1 });
+
+            const step = await waitForStepStatus(
+                chotu,
+                id,
+                "DefaultSlowStep",
+                StepExecutionStatus.FAILED,
+            );
+            expect(step.error?.message).toContain("timed out after 80ms");
+
+            const run = await waitForRunStatus(chotu, id, WorkflowRunStatus.FAILED);
+            expect(run?.status).toBe(WorkflowRunStatus.FAILED);
+        } finally {
+            await chotu.shutdown();
+            resetChotu();
+        }
+    }, 15_000);
 });

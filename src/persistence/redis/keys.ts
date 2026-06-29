@@ -4,8 +4,8 @@ export const SYNC_CONSUMER_GROUP = "chotu-flusher";
 export const RECOVERY_LEADER_KEY = "chotu:recovery:leader";
 export const STARTUP_RECONCILE_KEY = "chotu:startup:reconcile";
 
-export const DEFAULT_LEASE_TTL_MS = 60_000;
-export const RECOVERY_LEADER_TTL_SEC = 30;
+export const RECOVERY_LEADER_TTL_SEC = 20;
+export const RECOVERY_INTERVAL_MS = 30_000;
 export const STARTUP_RECONCILE_TTL_SEC = 300;
 
 export function stepKey(stepExecId: string): string {

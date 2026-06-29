@@ -190,7 +190,8 @@ export function durabilityBaseConfig() {
     return {
         postgresUrl: process.env.POSTGRES_URL!,
         redisUrl: process.env.REDIS_URL!,
-        leaseTtlMs: 2_000,
+        defaultStepTimeoutMs: 2_000,
+        leaseBufferMs: 500,
         flushIntervalMs: 200,
         queues: [
             { name: "orchestrator", concurrency: 2, maxRetries: 3, pollIntervalMs: 50 },

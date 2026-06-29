@@ -19,8 +19,8 @@ const chotu = createChotu({
   queues: [{ name: "default", concurrency: 2, maxRetries: 3 }],
   stepQueues: { MyStep: "default" },
   workflows: [MyWorkflow],
-  staleRunningThresholdMs: 300_000, // optional
-  leaseTtlMs: 60_000, // optional — execution lease TTL (default: 60000)
+  defaultStepTimeoutMs: 60_000, // optional — max step runtime (default: 60000)
+  leaseBufferMs: 30_000, // optional — added above timeout for execution lease (default: 30000)
 });
 
 await chotu.listen();
@@ -61,8 +61,8 @@ Bun loads `.env` automatically — no `dotenv` needed.
 | `redisUrl` | Redis connection URL (live execution state and queues) |
 | `postgresMaxConnections` | Postgres pool size (default: 10) |
 | `flushIntervalMs` | Async flush interval for non-terminal PG updates (default: 1000) |
-| `staleRunningThresholdMs` | Legacy threshold; lease expiry drives stale recovery (default: 300000) |
-| `leaseTtlMs` | Execution lease TTL in ms (default: 60000) |
+| `defaultStepTimeoutMs` | Default max step runtime in ms; every step is timed out (default: 60000) |
+| `leaseBufferMs` | Added above step timeout when computing execution lease (default: 30000) |
 | `queues` | Worker queue configs (concurrency per instance, retries, rate limits) |
 | `stepQueues` | Map step names to queue names |
 | `workflows` | Workflow definitions |
@@ -132,11 +132,17 @@ Steps can read the cache via `workflowRunId` from `StepHookContext` in `onBefore
 
 ## Steps
 
-Step methods receive an `AbortSignal` that aborts on `shutdown()`. Check `signal.aborted` in long-running work.
+Step methods receive an `AbortSignal` that aborts on `shutdown()` or step timeout. Check `signal.aborted` in long-running work.
+
+Every step has a **timeout** (default: `defaultStepTimeoutMs`, 60s). Override per step with `static timeoutMs`. The execution **lease** is derived automatically as `timeout + leaseBufferMs` so crash recovery does not fire before the in-process timeout.
 
 ```ts
-abstract run(input: I, signal: AbortSignal): Promise<O>;
-abstract getNextSteps(input: I, output: O, signal: AbortSignal): NextStepsResult | Promise<NextStepsResult>;
+class MyStep extends Step<I, O> {
+  static timeoutMs = 120_000; // optional — overrides defaultStepTimeoutMs for this step
+
+  abstract run(input: I, signal: AbortSignal): Promise<O>;
+  abstract getNextSteps(input: I, output: O, signal: AbortSignal): NextStepsResult | Promise<NextStepsResult>;
+}
 
 // Optional instance hooks — ctx includes workflowRunId, stepName, attempt, etc.
 async onBeforeRun(input: I, ctx: StepHookContext, signal: AbortSignal): Promise<void>;

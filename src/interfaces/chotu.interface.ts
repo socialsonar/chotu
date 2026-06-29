@@ -15,7 +15,10 @@ export interface ChotuConfig {
     redisUrl: string;
     postgresMaxConnections?: number;
     flushIntervalMs?: number;
-    leaseTtlMs?: number;
+    /** Max step runtime before timeout (default: 60000). Lease is derived per step. */
+    defaultStepTimeoutMs?: number;
+    /** Added above step timeout when computing execution lease (default: 30000). */
+    leaseBufferMs?: number;
     queues: QueueConfig[];
     stepQueues: Record<string, string>;
     workflows: WorkflowDefinition[];

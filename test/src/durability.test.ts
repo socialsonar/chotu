@@ -316,7 +316,8 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
         resetChotu();
         const submitter = createChotu({
             ...durabilityBaseConfig(),
-            leaseTtlMs: 1_500,
+            defaultStepTimeoutMs: 1_000,
+            leaseBufferMs: 500,
         });
         await submitter.listen({ deferWorkers: true });
 

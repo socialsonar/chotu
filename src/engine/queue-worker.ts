@@ -3,6 +3,7 @@ import type { QueueConfig } from "../interfaces/queue.interface";
 import type { IStateStore } from "../interfaces/state-store.interface";
 import { StepExecutionStatus } from "../interfaces/workflow.interface";
 import type { ChotuLogger } from "../logger";
+import { RECOVERY_INTERVAL_MS } from "../persistence/redis/keys";
 import { ChotuHookRunner } from "./hook-runner";
 import { StepRegistry } from "./step-registry";
 import { RecoveryService } from "./recovery.service";
@@ -13,6 +14,7 @@ export class QueueWorkerPool {
     private workers: Promise<void>[] = [];
     private readonly inFlight = new Set<Promise<unknown>>();
     private readonly inFlightStepIds = new Set<string>();
+    private readonly inFlightStepNames = new Map<string, string>();
     private lastRecoveryAt = 0;
     private readonly abortControllers = new Map<string, AbortController>();
 
@@ -24,7 +26,6 @@ export class QueueWorkerPool {
         private readonly registry: StepRegistry,
         private readonly logger: ChotuLogger,
         private readonly instanceId: string,
-        private readonly leaseTtlMs: number,
         private readonly hookRunner: ChotuHookRunner,
     ) {}
 
@@ -35,6 +36,7 @@ export class QueueWorkerPool {
     async start(): Promise<void> {
         if (this.started) return;
         this.started = true;
+        this.lastRecoveryAt = Date.now();
 
         for (const queue of this.registry.allQueues()) {
             for (let i = 0; i < queue.concurrency; i++) {
@@ -58,6 +60,7 @@ export class QueueWorkerPool {
         await Promise.allSettled(this.workers);
         this.workers = [];
         this.inFlight.clear();
+        this.inFlightStepNames.clear();
         this.abortControllers.clear();
     }
 
@@ -66,7 +69,7 @@ export class QueueWorkerPool {
 
         while (this.started) {
             try {
-                if (Date.now() - this.lastRecoveryAt > 60_000) {
+                if (Date.now() - this.lastRecoveryAt > RECOVERY_INTERVAL_MS) {
                     this.lastRecoveryAt = Date.now();
                     if (await this.stateStore.tryAcquireRecoveryLeader(this.instanceId)) {
                         await this.runLeaderRecovery();
@@ -91,7 +94,7 @@ export class QueueWorkerPool {
                 const claimed = await this.stateStore.claimStep(
                     stepExecId,
                     this.instanceId,
-                    this.leaseTtlMs,
+                    this.registry.getLeaseTtlMs(row.step_name),
                 );
                 if (!claimed) {
                     await this.handleFailedClaim(stepExecId, queue.name);
@@ -127,6 +130,7 @@ export class QueueWorkerPool {
                     const controller = new AbortController();
                     this.abortControllers.set(stepExecId, controller);
                     this.inFlightStepIds.add(stepExecId);
+                    this.inFlightStepNames.set(stepExecId, claimed.step_name);
 
                     const work = this.stepExecutor.processStepExecution(
                         claimed,
@@ -152,6 +156,7 @@ export class QueueWorkerPool {
                     } finally {
                         this.inFlight.delete(work);
                         this.inFlightStepIds.delete(stepExecId);
+                        this.inFlightStepNames.delete(stepExecId);
                         this.abortControllers.delete(stepExecId);
                     }
                 } finally {
@@ -168,15 +173,30 @@ export class QueueWorkerPool {
 
     private async renewInFlightLeases(): Promise<void> {
         for (const stepExecId of this.inFlightStepIds) {
-            await this.stateStore.renewLease(stepExecId, this.instanceId, this.leaseTtlMs);
+            const stepName = this.inFlightStepNames.get(stepExecId);
+            if (!stepName) continue;
+            await this.stateStore.renewLease(
+                stepExecId,
+                this.instanceId,
+                this.registry.getLeaseTtlMs(stepName),
+            );
         }
     }
 
     private async runLeaderRecovery(): Promise<void> {
-        await this.recovery.recoverInflightSteps();
-        await this.recovery.recoverStaleRunningSteps();
-        await this.recovery.recoverOrphanedPendingSteps();
-        await this.recovery.rebuildJoinStateFromRedis();
+        const steps: Array<() => Promise<void>> = [
+            () => this.recovery.recoverInflightSteps(),
+            () => this.recovery.recoverStaleRunningSteps(),
+            () => this.recovery.recoverOrphanedPendingSteps(),
+            () => this.recovery.rebuildJoinStateFromRedis(),
+        ];
+
+        for (const step of steps) {
+            if (!(await this.stateStore.tryAcquireRecoveryLeader(this.instanceId))) {
+                return;
+            }
+            await step();
+        }
     }
 
     private async handleFailedClaim(stepExecId: string, queueName: string): Promise<void> {

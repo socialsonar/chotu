@@ -20,7 +20,7 @@
   "scripts": {
     "test": "bun run --cwd test start",
     "test:dev": "bun run --cwd test dev",
-    "test:unit": "bun test --serial test/src/multi-instance.test.ts test/src/step-timeout.test.ts test/src/hooks.test.ts test/src/hooks-stress.test.ts test/src/durability.test.ts",
+    "test:unit": "bun test --serial test/src/timeout-lease.test.ts test/src/multi-instance.test.ts test/src/step-timeout.test.ts test/src/hooks.test.ts test/src/durability.test.ts test/src/hooks-stress.test.ts",
     "test:stress": "bun run --cwd test stress",
     "test:stress:quick": "bun run --cwd test stress:quick",
     "build": "bun run build:js && bun run build:types",

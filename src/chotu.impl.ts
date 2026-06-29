@@ -14,7 +14,6 @@ import { PgFlusher } from "./persistence/pg/flusher";
 import { PgRepository } from "./persistence/pg/repository";
 import { RedisFairQueue } from "./persistence/redis/fair-queue";
 import { RedisStateStore } from "./persistence/redis/state-store";
-import { DEFAULT_LEASE_TTL_MS } from "./persistence/redis/keys";
 
 export default class ChotuImpl implements Chotu {
     private readonly sql: SQL;
@@ -52,6 +51,10 @@ export default class ChotuImpl implements Chotu {
             config.queues,
             config.stepQueues,
             config.workflows,
+            {
+                defaultStepTimeoutMs: config.defaultStepTimeoutMs,
+                leaseBufferMs: config.leaseBufferMs,
+            },
         );
         const hookRunner = new ChotuHookRunner(config.hooks, this.logger);
         const lifecycle = new WorkflowLifecycle(
@@ -87,7 +90,6 @@ export default class ChotuImpl implements Chotu {
             registry,
             this.logger,
             this.instanceId,
-            config.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS,
             hookRunner,
         );
 

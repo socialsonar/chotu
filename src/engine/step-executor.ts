@@ -48,7 +48,7 @@ export class StepExecutor {
             attempt: attempts + 1,
         };
         const shutdownSignal = signal;
-        const timeoutMs = this.registry.getStepTimeoutMs(row.step_name);
+        const timeoutMs = this.registry.getEffectiveStepTimeoutMs(row.step_name);
         const { stepSignal, cleanup } = this.createStepSignal(
             shutdownSignal,
             timeoutMs,
@@ -90,17 +90,13 @@ export class StepExecutor {
                 }
             };
 
-            if (timeoutMs != null) {
-                await this.raceWithStepTimeout(
-                    execute,
-                    stepSignal,
-                    shutdownSignal,
-                    timeoutMs,
-                    row.step_name,
-                );
-            } else {
-                await execute();
-            }
+            await this.raceWithStepTimeout(
+                execute,
+                stepSignal,
+                shutdownSignal,
+                timeoutMs,
+                row.step_name,
+            );
 
             return false;
         } catch (err) {
@@ -178,13 +174,9 @@ export class StepExecutor {
 
     private createStepSignal(
         shutdownSignal: AbortSignal,
-        timeoutMs: number | undefined,
+        timeoutMs: number,
         stepName: string,
     ): { stepSignal: AbortSignal; cleanup: () => void } {
-        if (timeoutMs == null) {
-            return { stepSignal: shutdownSignal, cleanup: () => {} };
-        }
-
         const timeoutController = new AbortController();
         const stepSignal = AbortSignal.any([shutdownSignal, timeoutController.signal]);
         const timer = setTimeout(() => {

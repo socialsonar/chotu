@@ -1,18 +1,45 @@
 import { getStepName, getStepTimeoutMs, type StepClass } from "../domain/step";
+import {
+    computeLeaseTtlMs,
+    DEFAULT_LEASE_BUFFER_MS,
+    DEFAULT_STEP_TIMEOUT_MS,
+    resolveStepTimeoutMs,
+} from "../domain/timeout";
 import { validateConfig, type WorkflowDefinition } from "../domain/workflow";
 import type { QueueConfig } from "../interfaces/queue.interface";
+
+export interface StepRegistryOptions {
+    defaultStepTimeoutMs?: number;
+    leaseBufferMs?: number;
+}
 
 export class StepRegistry {
     private readonly stepClasses = new Map<string, StepClass<any, any>>();
     private readonly workflows = new Map<string, WorkflowDefinition>();
     private readonly queues = new Map<string, QueueConfig>();
     readonly stepQueues: Record<string, string>;
+    private readonly defaultStepTimeoutMs: number;
+    private readonly leaseBufferMs: number;
 
     constructor(
         queueConfigs: QueueConfig[],
         stepQueues: Record<string, string>,
         workflowDefinitions: WorkflowDefinition[],
+        options: StepRegistryOptions = {},
     ) {
+        const defaultStepTimeoutMs = options.defaultStepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
+        const leaseBufferMs = options.leaseBufferMs ?? DEFAULT_LEASE_BUFFER_MS;
+
+        if (defaultStepTimeoutMs < 1) {
+            throw new Error("[chotu] defaultStepTimeoutMs must be >= 1");
+        }
+        if (leaseBufferMs < 0) {
+            throw new Error("[chotu] leaseBufferMs must be >= 0");
+        }
+
+        this.defaultStepTimeoutMs = defaultStepTimeoutMs;
+        this.leaseBufferMs = leaseBufferMs;
+
         validateConfig(queueConfigs, stepQueues, workflowDefinitions);
 
         for (const queue of queueConfigs) {
@@ -56,10 +83,18 @@ export class StepRegistry {
         return queueName;
     }
 
-    getStepTimeoutMs(stepName: string): number | undefined {
+    getStepTimeoutOverrideMs(stepName: string): number | undefined {
         const stepClass = this.stepClasses.get(stepName);
         if (!stepClass) return undefined;
         return getStepTimeoutMs(stepClass);
+    }
+
+    getEffectiveStepTimeoutMs(stepName: string): number {
+        return resolveStepTimeoutMs(this.getStepTimeoutOverrideMs(stepName), this.defaultStepTimeoutMs);
+    }
+
+    getLeaseTtlMs(stepName: string): number {
+        return computeLeaseTtlMs(this.getEffectiveStepTimeoutMs(stepName), this.leaseBufferMs);
     }
 
     getEffectiveMaxAttempts(queue: QueueConfig, error: Error): number {

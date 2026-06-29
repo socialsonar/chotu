@@ -43,6 +43,14 @@ export type {
     ParallelSpec,
     StepClass,
 } from "./domain/step";
+export { StepRegistry } from "./engine/step-registry";
+export type { StepRegistryOptions } from "./engine/step-registry";
+export {
+    computeLeaseTtlMs,
+    DEFAULT_LEASE_BUFFER_MS,
+    DEFAULT_STEP_TIMEOUT_MS,
+    resolveStepTimeoutMs,
+} from "./domain/timeout";
 export { defineWorkflow, validateConfig, validateStepQueues } from "./domain/workflow";
 export type { WorkflowDefinition } from "./domain/workflow";
 

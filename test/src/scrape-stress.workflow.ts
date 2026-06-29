@@ -261,7 +261,8 @@ export function stressBaseConfig() {
     return {
         postgresUrl: process.env.POSTGRES_URL!,
         redisUrl: process.env.REDIS_URL!,
-        leaseTtlMs: 30_000,
+        defaultStepTimeoutMs: 30_000,
+        leaseBufferMs: 5_000,
         flushIntervalMs: 500,
         queues: [
             { name: "planner", concurrency: 50, maxRetries: 2, pollIntervalMs: 50 },
