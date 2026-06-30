@@ -72,8 +72,11 @@ function validateWorkflowInstance<I, O>(instance: Workflow<I, O>): void {
     }
 }
 
-export function defineWorkflow<I, O>(WorkflowCls: WorkflowClass<I, O>): Workflow<I, O> {
-    const instance = new WorkflowCls();
+export function defineWorkflow<I, O>(
+    workflowOrClass: Workflow<I, O> | WorkflowClass<I, O>,
+): Workflow<I, O> {
+    const instance =
+        typeof workflowOrClass === "function" ? new workflowOrClass() : workflowOrClass;
     validateWorkflowInstance(instance);
     return instance;
 }

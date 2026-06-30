@@ -1,7 +1,7 @@
 import type { Chotu, ChotuConfig, ChotuHealth } from "./interfaces/chotu.interface";
 import ChotuImpl from "./chotu.impl";
 
-export type { Chotu, ChotuConfig, ChotuHealth } from "./interfaces/chotu.interface";
+export type { Chotu, ChotuConfig, ChotuHealth, StepResolver } from "./interfaces/chotu.interface";
 export type {
     ChotuHooks,
     StepCancelledContext,

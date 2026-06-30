@@ -1,3 +1,4 @@
+import type { StepResolver } from "../interfaces/chotu.interface";
 import type { StepHookContext } from "../interfaces/hooks.interface";
 import type { IFairQueue } from "../interfaces/fair-queue.interface";
 import type { QueueConfig } from "../interfaces/queue.interface";
@@ -14,6 +15,7 @@ export class StepExecutor {
         private readonly fairQueue: IFairQueue,
         private readonly logger: ChotuLogger,
         private readonly hookRunner: ChotuHookRunner,
+        private readonly resolveStep?: StepResolver,
     ) {}
 
     async processStepExecution(
@@ -36,7 +38,7 @@ export class StepExecutor {
         const runRow = await this.lifecycle.loadRun(row.workflow_run_id);
         const workflowName = runRow?.workflow_name ?? "unknown";
 
-        const step = new stepClass();
+        const step = this.resolveStep?.(stepClass) ?? new stepClass();
         const input = this.normalizeInput(row.input);
         const attempts = row.attempts;
         const ctx: StepHookContext = {

@@ -1,8 +1,11 @@
+import type { Step, StepClass } from "../domain/step";
 import type { CreatedWorkflowRun, StepExecution, WorkflowRun } from "./workflow.interface";
 import type { Workflow } from "../domain/workflow";
 import type { QueueConfig } from "./queue.interface";
 import type { ChotuLogger } from "../logger";
 import type { ChotuHooks } from "./hooks.interface";
+
+export type StepResolver = (stepClass: StepClass<any, any>) => Step<any, any>;
 
 export interface ChotuHealth {
     postgres: boolean;
@@ -22,6 +25,7 @@ export interface ChotuConfig {
     queues: QueueConfig[];
     stepQueues: Record<string, string>;
     workflows: Workflow[];
+    resolveStep?: StepResolver;
     logger?: ChotuLogger;
     hooks?: ChotuHooks;
 }

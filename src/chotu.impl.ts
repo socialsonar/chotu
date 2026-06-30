@@ -71,6 +71,7 @@ export default class ChotuImpl implements Chotu {
             this.fairQueue,
             this.logger,
             hookRunner,
+            config.resolveStep,
         );
         const recovery = new RecoveryService(
             this.stateStore,
