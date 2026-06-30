@@ -1,4 +1,5 @@
-import type { RedisClient } from "bun";
+import type { ChotuRedis } from "../../platform";
+import { sleep } from "../../platform/sleep";
 import type { IFairQueue } from "../../interfaces/fair-queue.interface";
 import type { QueueConfig } from "../../interfaces/queue.interface";
 import {
@@ -19,7 +20,7 @@ import {
 } from "./scripts";
 
 export class RedisFairQueue implements IFairQueue {
-    constructor(private readonly redis: RedisClient) {}
+    constructor(private readonly redis: ChotuRedis) {}
 
     async pop(queueName: string): Promise<string | null> {
         return (await this.redis.send("EVAL", [
@@ -83,7 +84,7 @@ export class RedisFairQueue implements IFairQueue {
                 if (attempt === maxAttempts - 1) {
                     throw err;
                 }
-                await Bun.sleep(100 * (attempt + 1));
+                await sleep(100 * (attempt + 1));
             }
         }
     }

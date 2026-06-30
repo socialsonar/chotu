@@ -1,4 +1,4 @@
-import { RedisClient, SQL } from "bun";
+import { createRedis, createSql, type ChotuRedis, type ChotuSql } from "./platform";
 import { ChotuEngine } from "./engine/engine";
 import { ChotuHookRunner } from "./engine/hook-runner";
 import { StepRegistry } from "./engine/step-registry";
@@ -16,8 +16,8 @@ import { RedisFairQueue } from "./persistence/redis/fair-queue";
 import { RedisStateStore } from "./persistence/redis/state-store";
 
 export default class ChotuImpl implements Chotu {
-    private readonly sql: SQL;
-    private readonly redis: RedisClient;
+    private readonly sql: ChotuSql;
+    private readonly redis: ChotuRedis;
     private readonly repository: PgRepository;
     private readonly stateStore: RedisStateStore;
     private readonly fairQueue: RedisFairQueue;
@@ -33,10 +33,10 @@ export default class ChotuImpl implements Chotu {
         private readonly onShutdown?: () => void,
     ) {
         this.logger = config.logger ?? defaultLogger;
-        this.sql = new SQL(config.postgresUrl, {
+        this.sql = createSql(config.postgresUrl, {
             max: config.postgresMaxConnections ?? 10,
         });
-        this.redis = new RedisClient(config.redisUrl);
+        this.redis = createRedis(config.redisUrl);
         this.repository = new PgRepository(this.sql);
         this.stateStore = new RedisStateStore(this.redis);
         this.fairQueue = new RedisFairQueue(this.redis);
@@ -154,7 +154,7 @@ export default class ChotuImpl implements Chotu {
         this.workersStarted = false;
         this.engine.setWorkersStarted(false);
 
-        await this.sql.close();
+        await this.sql.end({ timeout: 5 });
         this.redis.close();
 
         this.logger.info("[chotu] Stopped.");

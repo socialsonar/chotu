@@ -1,4 +1,4 @@
-import type { RedisClient } from "bun";
+import type { ChotuRedis } from "../platform";
 import type { IFairQueue } from "../interfaces/fair-queue.interface";
 import type { IWorkflowRepository } from "../interfaces/repository.interface";
 import type { IStateStore } from "../interfaces/state-store.interface";
@@ -16,7 +16,7 @@ export class RecoveryService {
         private readonly lifecycle: WorkflowLifecycle,
         private readonly registry: StepRegistry,
         private readonly logger: ChotuLogger,
-        private readonly redis: RedisClient,
+        private readonly redis: ChotuRedis,
         private readonly instanceId: string,
     ) {}
 

@@ -1,4 +1,4 @@
-import type { SQL } from "bun";
+import type { ChotuSql } from "./platform";
 import type { ChotuLogger } from "./logger";
 import { defaultLogger } from "./logger";
 
@@ -11,17 +11,17 @@ const STEP_STATUS_CHECK = STEP_STATUS.map((s) => `'${s}'`).join(", ");
 type Migration = {
     version: number;
     name: string;
-    up: (sql: SQL) => Promise<void>;
+    up: (sql: ChotuSql) => Promise<void>;
 };
 
-async function migrationApplied(sql: SQL, version: number): Promise<boolean> {
+async function migrationApplied(sql: ChotuSql, version: number): Promise<boolean> {
     const [row] = await sql`
         SELECT 1 FROM chotu.schema_migrations WHERE version = ${version}
     `;
     return Boolean(row);
 }
 
-async function recordMigration(sql: SQL, version: number, name: string): Promise<void> {
+async function recordMigration(sql: ChotuSql, version: number, name: string): Promise<void> {
     await sql`
         INSERT INTO chotu.schema_migrations (version, name)
         VALUES (${version}, ${name})
@@ -266,7 +266,7 @@ const migrations: Migration[] = [
 ];
 
 export async function ensureSchema(
-    sql: SQL,
+    sql: ChotuSql,
     logger: ChotuLogger = defaultLogger,
 ): Promise<void> {
     await sql`CREATE SCHEMA IF NOT EXISTS chotu`;

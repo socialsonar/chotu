@@ -1,4 +1,4 @@
-import type { SQL } from "bun";
+import type { ChotuSql } from "../../platform";
 import { fromPgRow } from "../../domain/execution.mapper";
 import type { IWorkflowRepository } from "../../interfaces/repository.interface";
 import {
@@ -10,7 +10,7 @@ import {
 } from "../../interfaces/workflow.interface";
 
 export class PgRepository implements IWorkflowRepository {
-    constructor(private readonly sql: SQL) {}
+    constructor(private readonly sql: ChotuSql) {}
 
     async getWorkflowRun(id: string): Promise<WorkflowRun | null> {
         const [row] = await this.sql`
@@ -269,7 +269,7 @@ export class PgRepository implements IWorkflowRepository {
             WHERE se.status = ${StepExecutionStatus.PENDING}
                 AND wr.status = ${WorkflowRunStatus.RUNNING}
         `;
-        return rows as { id: string; workflow_run_id: string; queue: string }[];
+        return rows as unknown as { id: string; workflow_run_id: string; queue: string }[];
     }
 
     async getRunRow(workflowRunId: string): Promise<Record<string, unknown> | null> {
@@ -379,7 +379,7 @@ export class PgRepository implements IWorkflowRepository {
             ORDER BY step_name, finished_at DESC NULLS LAST
         `;
         const names = new Set(terminalNames);
-        return (rows as { step_name: string; output: Record<string, any> | null }[]).filter(
+        return (rows as unknown as { step_name: string; output: Record<string, any> | null }[]).filter(
             (r) => names.has(r.step_name),
         );
     }

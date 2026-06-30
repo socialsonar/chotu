@@ -1,7 +1,6 @@
 {
   "name": "@socialsonar/chotu",
-  "version": "0.1.1",
-  "workspaces": ["examples"],
+  "version": "0.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/socialsonar/chotu.git"
@@ -15,14 +14,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "bun": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "test": "bun run --cwd test start",
@@ -30,16 +27,24 @@
     "test:unit": "bun test --serial test/src/timeout-lease.test.ts test/src/multi-instance.test.ts test/src/step-timeout.test.ts test/src/hooks.test.ts test/src/abort-workflow.test.ts test/src/durability.test.ts test/src/hooks-stress.test.ts",
     "test:stress": "bun run --cwd test stress",
     "test:stress:quick": "bun run --cwd test stress:quick",
-    "build": "bun run build:js && bun run build:types",
-    "build:js": "bun build ./src/index.ts --outdir ./dist --target bun --format esm",
+    "build": "npm run build:js && npm run build:types",
+    "build:js": "esbuild ./src/index.ts --outdir=./dist --platform=node --format=esm --packages=external",
     "build:types": "tsc --emitDeclarationOnly",
-    "build:watch:js": "bun build ./src/index.ts --outdir ./dist --target bun --format esm --watch",
+    "build:watch:js": "esbuild ./src/index.ts --outdir=./dist --platform=node --format=esm --packages=external --watch",
     "build:watch:types": "tsc --emitDeclarationOnly --watch --preserveWatchOutput",
-    "build:watch": "bun run build:watch:js & bun run build:watch:types; wait",
-    "prepublishOnly": "bun run build"
+    "build:watch": "npm run build:watch:js & npm run build:watch:types; wait",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ioredis": "^5.6.1",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/node": "^22.15.3",
+    "esbuild": "^0.25.5",
     "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

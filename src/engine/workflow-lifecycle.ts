@@ -22,6 +22,7 @@ import {
     type WorkflowRunRecord,
 } from "../interfaces/workflow.interface";
 import type { ChotuLogger } from "../logger";
+import { sleep } from "../platform/sleep";
 import { StepRegistry } from "./step-registry";
 
 async function syncWithRetry(
@@ -39,7 +40,7 @@ async function syncWithRetry(
                 logger.error(`[chotu] ${label} failed after ${maxAttempts} attempts:`, err);
                 return;
             }
-            await Bun.sleep(100 * attempt);
+            await sleep(100 * attempt);
         }
     }
 }

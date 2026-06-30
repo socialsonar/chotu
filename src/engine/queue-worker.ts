@@ -3,6 +3,7 @@ import type { QueueConfig } from "../interfaces/queue.interface";
 import type { IStateStore } from "../interfaces/state-store.interface";
 import { StepExecutionStatus } from "../interfaces/workflow.interface";
 import type { ChotuLogger } from "../logger";
+import { sleep } from "../platform/sleep";
 import { RECOVERY_INTERVAL_MS } from "../persistence/redis/keys";
 import { ChotuHookRunner } from "./hook-runner";
 import { StepRegistry } from "./step-registry";
@@ -90,7 +91,7 @@ export class QueueWorkerPool {
 
                 const stepExecId = await this.fairQueue.pop(queue.name);
                 if (!stepExecId) {
-                    await Bun.sleep(pollMs);
+                    await sleep(pollMs);
                     continue;
                 }
 
@@ -145,7 +146,7 @@ export class QueueWorkerPool {
                             claimed.workflow_run_id,
                         );
                         inflightHandled = true;
-                        await Bun.sleep(this.fairQueue.rateLimitBackoffMs(queue));
+                        await sleep(this.fairQueue.rateLimitBackoffMs(queue));
                         continue;
                     }
 
@@ -193,7 +194,7 @@ export class QueueWorkerPool {
                 }
             } catch (err) {
                 this.logger.error(`[chotu] Worker error on queue "${queue.name}":`, err);
-                await Bun.sleep(1000);
+                await sleep(1000);
             }
         }
     }

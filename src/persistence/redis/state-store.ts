@@ -1,4 +1,4 @@
-import type { RedisClient } from "bun";
+import type { ChotuRedis } from "../../platform";
 import {
     fromRedisHash,
     fromRedisRunHash,
@@ -58,7 +58,7 @@ function decodeJson<T>(value: string | null | undefined): T | null {
 }
 
 async function readHash(
-    redis: RedisClient,
+    redis: ChotuRedis,
     key: string,
 ): Promise<Record<string, string>> {
     const fields = (await redis.send("HGETALL", [key])) as string[] | Record<string, string>;
@@ -68,7 +68,7 @@ async function readHash(
 }
 
 export class RedisStateStore implements IStateStore {
-    constructor(private readonly redis: RedisClient) {}
+    constructor(private readonly redis: ChotuRedis) {}
 
     private nowIso(): string {
         return new Date().toISOString();

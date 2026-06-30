@@ -1,4 +1,5 @@
-import type { RedisClient } from "bun";
+import type { ChotuRedis } from "../../platform";
+import { sleep } from "../../platform/sleep";
 import { StepExecutionStatus } from "../../interfaces/workflow.interface";
 import { parseRedisFields } from "../../domain/execution.mapper";
 import type { IWorkflowRepository } from "../../interfaces/repository.interface";
@@ -14,7 +15,7 @@ export class PgFlusher {
     private readonly consumerId = `flusher-${crypto.randomUUID().slice(0, 8)}`;
 
     constructor(
-        private readonly redis: RedisClient,
+        private readonly redis: ChotuRedis,
         private readonly repository: IWorkflowRepository,
         private readonly flushIntervalMs: number,
         private readonly logger: ChotuLogger = defaultLogger,
@@ -45,7 +46,7 @@ export class PgFlusher {
 
         await Promise.race([
             this.loopPromise,
-            Bun.sleep(drainTimeoutMs),
+            sleep(drainTimeoutMs),
         ]);
         this.loopPromise = null;
     }
@@ -57,7 +58,7 @@ export class PgFlusher {
             } catch (err) {
                 this.logger.error("[chotu] Flusher error:", err);
             }
-            await Bun.sleep(this.flushIntervalMs);
+            await sleep(this.flushIntervalMs);
         }
 
         try {
