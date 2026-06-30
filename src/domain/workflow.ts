@@ -1,66 +1,86 @@
+import type { WorkflowHookContext } from "../interfaces/hooks.interface";
 import { getStepName, getStepTimeoutMs, type StepClass } from "./step";
 import type { QueueConfig } from "../interfaces/queue.interface";
 
-export interface WorkflowDefinition<I = any> {
-    name: string;
-    firstStep: StepClass<I, any>;
-    steps: StepClass<any, any>[];
-    completeStep?: StepClass<any, any>;
-    terminalSteps?: StepClass<any, any>[];
+export abstract class Workflow<I = any, O = any> {
+    abstract readonly name: string;
+    abstract readonly firstStep: StepClass<I, any>;
+    abstract readonly steps: StepClass<any, any>[];
+    readonly completeStep?: StepClass<any, any>;
+    readonly terminalSteps?: StepClass<any, any>[];
+
+    async onBeforeStart(
+        _input: I,
+        _ctx: WorkflowHookContext,
+        _signal: AbortSignal,
+    ): Promise<I | void> {}
+
+    async onAfterCompleted(
+        _input: I,
+        _output: O | null,
+        _ctx: WorkflowHookContext,
+        _signal: AbortSignal,
+    ): Promise<void> {}
 }
+
+export type WorkflowClass<I = any, O = any> = new () => Workflow<I, O>;
 
 function stepInList(step: StepClass<any, any>, steps: StepClass<any, any>[]): boolean {
     const name = getStepName(step);
     return steps.some((s) => getStepName(s) === name);
 }
 
-export function defineWorkflow<I>(config: WorkflowDefinition<I>): WorkflowDefinition<I> {
-    if (!config.name?.trim()) {
+function validateWorkflowInstance<I, O>(instance: Workflow<I, O>): void {
+    if (!instance.name?.trim()) {
         throw new Error("[chotu] Workflow name is required");
     }
 
-    if (!stepInList(config.firstStep, config.steps)) {
+    if (!stepInList(instance.firstStep, instance.steps)) {
         throw new Error(
-            `[chotu] Workflow "${config.name}": firstStep "${getStepName(config.firstStep)}" must be in steps`,
+            `[chotu] Workflow "${instance.name}": firstStep "${getStepName(instance.firstStep)}" must be in steps`,
         );
     }
 
-    if (config.completeStep && !stepInList(config.completeStep, config.steps)) {
+    if (instance.completeStep && !stepInList(instance.completeStep, instance.steps)) {
         throw new Error(
-            `[chotu] Workflow "${config.name}": completeStep "${getStepName(config.completeStep)}" must be in steps`,
+            `[chotu] Workflow "${instance.name}": completeStep "${getStepName(instance.completeStep)}" must be in steps`,
         );
     }
 
-    if (config.terminalSteps) {
-        for (const terminal of config.terminalSteps) {
-            if (!stepInList(terminal, config.steps)) {
+    if (instance.terminalSteps) {
+        for (const terminal of instance.terminalSteps) {
+            if (!stepInList(terminal, instance.steps)) {
                 throw new Error(
-                    `[chotu] Workflow "${config.name}": terminalStep "${getStepName(terminal)}" must be in steps`,
+                    `[chotu] Workflow "${instance.name}": terminalStep "${getStepName(terminal)}" must be in steps`,
                 );
             }
         }
     }
 
-    const names = config.steps.map(getStepName);
+    const names = instance.steps.map(getStepName);
     const duplicates = names.filter((n, i) => names.indexOf(n) !== i);
     if (duplicates.length > 0) {
         throw new Error(
-            `[chotu] Workflow "${config.name}": duplicate step names: ${[...new Set(duplicates)].join(", ")}`,
+            `[chotu] Workflow "${instance.name}": duplicate step names: ${[...new Set(duplicates)].join(", ")}`,
         );
     }
 
-    if (!config.completeStep && !config.terminalSteps?.length) {
+    if (!instance.completeStep && !instance.terminalSteps?.length) {
         throw new Error(
-            `[chotu] Workflow "${config.name}": define completeStep or terminalSteps for workflow completion output`,
+            `[chotu] Workflow "${instance.name}": define completeStep or terminalSteps for workflow completion output`,
         );
     }
+}
 
-    return config;
+export function defineWorkflow<I, O>(WorkflowCls: WorkflowClass<I, O>): Workflow<I, O> {
+    const instance = new WorkflowCls();
+    validateWorkflowInstance(instance);
+    return instance;
 }
 
 export function validateStepQueues(
     stepQueues: Record<string, string>,
-    workflows: WorkflowDefinition[],
+    workflows: Workflow[],
 ): void {
     validateConfig([], stepQueues, workflows);
 }
@@ -68,7 +88,7 @@ export function validateStepQueues(
 export function validateConfig(
     queues: QueueConfig[],
     stepQueues: Record<string, string>,
-    workflows: WorkflowDefinition[],
+    workflows: Workflow[],
 ): void {
     if (!queues.length) {
         throw new Error("[chotu] At least one queue must be configured");

@@ -7,7 +7,8 @@ import {
     type NextStep,
     type ParallelSpec,
 } from "../domain/step";
-import type { WorkflowDefinition } from "../domain/workflow";
+import type { Workflow } from "../domain/workflow";
+import type { WorkflowHookContext } from "../interfaces/hooks.interface";
 import type { IFairQueue } from "../interfaces/fair-queue.interface";
 import type { ChotuHookRunner } from "./hook-runner";
 import type { IWorkflowRepository } from "../interfaces/repository.interface";
@@ -24,6 +25,8 @@ import {
 import type { ChotuLogger } from "../logger";
 import { sleep } from "../platform/sleep";
 import { StepRegistry } from "./step-registry";
+
+const DEFAULT_BEFORE_START_TIMEOUT_MS = 30_000;
 
 async function syncWithRetry(
     fn: () => Promise<void>,
@@ -62,6 +65,23 @@ export class WorkflowLifecycle {
         }
 
         const workflowRunId = crypto.randomUUID();
+        const hookCtx: WorkflowHookContext = {
+            workflowRunId,
+            workflowName: name,
+            input: input as Record<string, any>,
+        };
+
+        let effectiveInput = input;
+        const beforeStartResult = await workflow.onBeforeStart(
+            input,
+            hookCtx,
+            AbortSignal.timeout(DEFAULT_BEFORE_START_TIMEOUT_MS),
+        );
+        if (beforeStartResult !== undefined) {
+            effectiveInput = beforeStartResult;
+        }
+        const effectiveInputRecord = effectiveInput as Record<string, any>;
+
         const firstStepId = crypto.randomUUID();
         const firstStepName = getStepName(workflow.firstStep);
         const queue = this.registry.resolveQueue(firstStepName);
@@ -69,7 +89,7 @@ export class WorkflowLifecycle {
         await this.stateStore.createRun({
             id: workflowRunId,
             workflowName: name,
-            input: input as Record<string, any>,
+            input: effectiveInputRecord,
         });
 
         const created = await this.stateStore.createStep({
@@ -77,7 +97,7 @@ export class WorkflowLifecycle {
             workflowRunId,
             stepName: firstStepName,
             queue,
-            input: input as Record<string, any>,
+            input: effectiveInputRecord,
         });
 
         if (!created) {
@@ -91,7 +111,7 @@ export class WorkflowLifecycle {
             await this.repository.insertWorkflowRunWithFirstStep({
                 workflowRunId,
                 workflowName: name,
-                input: input as Record<string, any>,
+                input: effectiveInputRecord,
                 firstStepId,
                 firstStepName,
                 queue,
@@ -109,7 +129,7 @@ export class WorkflowLifecycle {
         await this.hookRunner.workflowStarted({
             workflowRunId,
             workflowName: name,
-            input: input as Record<string, any>,
+            input: effectiveInputRecord,
         });
 
         return { id: workflowRunId };
@@ -623,7 +643,7 @@ export class WorkflowLifecycle {
 
     private async handleCompleteStep(
         workflowRunId: string,
-        workflow: WorkflowDefinition,
+        workflow: Workflow,
         runRow: { input: Record<string, any> },
     ): Promise<void> {
         const completeStepName = getStepName(workflow.completeStep!);
@@ -669,11 +689,24 @@ export class WorkflowLifecycle {
             );
 
             this.logger.info(`[chotu] Workflow run ${workflowRunId} completed`);
+            const output = completeRow.output ?? null;
+            await this.invokeWorkflowHook("onAfterCompleted", () =>
+                workflow.onAfterCompleted(
+                    runRow.input,
+                    output,
+                    {
+                        workflowRunId,
+                        workflowName: workflow.name,
+                        input: runRow.input,
+                    },
+                    AbortSignal.timeout(DEFAULT_BEFORE_START_TIMEOUT_MS),
+                ),
+            );
             await this.hookRunner.workflowCompleted({
                 workflowRunId,
                 workflowName: workflow.name,
                 input: runRow.input,
-                output: completeRow.output ?? null,
+                output,
             });
             return;
         } else if (
@@ -690,7 +723,7 @@ export class WorkflowLifecycle {
 
     private async completeWorkflowWithoutCompleteStep(
         workflowRunId: string,
-        workflow: WorkflowDefinition | undefined,
+        workflow: Workflow | undefined,
     ): Promise<void> {
         let output: Record<string, any> | null = null;
 
@@ -737,12 +770,37 @@ export class WorkflowLifecycle {
 
         const runRow = await this.stateStore.loadRun(workflowRunId);
         if (runRow) {
+            if (workflow) {
+                await this.invokeWorkflowHook("onAfterCompleted", () =>
+                    workflow.onAfterCompleted(
+                        runRow.input,
+                        output,
+                        {
+                            workflowRunId,
+                            workflowName: runRow.workflow_name,
+                            input: runRow.input,
+                        },
+                        AbortSignal.timeout(DEFAULT_BEFORE_START_TIMEOUT_MS),
+                    ),
+                );
+            }
             await this.hookRunner.workflowCompleted({
                 workflowRunId,
                 workflowName: runRow.workflow_name,
                 input: runRow.input,
                 output,
             });
+        }
+    }
+
+    private async invokeWorkflowHook(
+        name: string,
+        fn: () => Promise<void> | void,
+    ): Promise<void> {
+        try {
+            await fn();
+        } catch (err) {
+            this.logger.error(`[chotu] Workflow hook ${name} failed:`, err);
         }
     }
 }

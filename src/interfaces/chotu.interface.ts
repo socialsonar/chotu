@@ -1,5 +1,5 @@
 import type { CreatedWorkflowRun, StepExecution, WorkflowRun } from "./workflow.interface";
-import type { WorkflowDefinition } from "../domain/workflow";
+import type { Workflow } from "../domain/workflow";
 import type { QueueConfig } from "./queue.interface";
 import type { ChotuLogger } from "../logger";
 import type { ChotuHooks } from "./hooks.interface";
@@ -21,7 +21,7 @@ export interface ChotuConfig {
     leaseBufferMs?: number;
     queues: QueueConfig[];
     stepQueues: Record<string, string>;
-    workflows: WorkflowDefinition[];
+    workflows: Workflow[];
     logger?: ChotuLogger;
     hooks?: ChotuHooks;
 }

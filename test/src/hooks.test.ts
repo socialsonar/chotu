@@ -4,6 +4,7 @@ import {
     defineWorkflow,
     resetChotu,
     Step,
+    Workflow,
     type ChotuHooks,
     type StepHookContext,
     WorkflowRunStatus,
@@ -62,19 +63,22 @@ class FailStep extends Step<{ v: number }, never> {
     }
 }
 
-const happyWorkflow = defineWorkflow({
-    name: "hooks-happy",
-    firstStep: HappyStep,
-    steps: [HappyStep],
-    terminalSteps: [HappyStep],
-});
+class HappyWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "hooks-happy";
+    readonly firstStep = HappyStep;
+    readonly steps = [HappyStep];
+    readonly terminalSteps = [HappyStep];
+}
 
-const failWorkflow = defineWorkflow({
-    name: "hooks-fail",
-    firstStep: FailStep,
-    steps: [FailStep],
-    terminalSteps: [FailStep],
-});
+class FailWorkflow extends Workflow<{ v: number }, never> {
+    readonly name = "hooks-fail";
+    readonly firstStep = FailStep;
+    readonly steps = [FailStep];
+    readonly terminalSteps = [FailStep];
+}
+
+const happyWorkflow = defineWorkflow(HappyWorkflow);
+const failWorkflow = defineWorkflow(FailWorkflow);
 
 async function waitForRun(
     chotu: ReturnType<typeof createChotu>,

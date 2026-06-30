@@ -53,8 +53,8 @@ export {
     DEFAULT_STEP_TIMEOUT_MS,
     resolveStepTimeoutMs,
 } from "./domain/timeout";
-export { defineWorkflow, validateConfig, validateStepQueues } from "./domain/workflow";
-export type { WorkflowDefinition } from "./domain/workflow";
+export { Workflow, defineWorkflow, validateConfig, validateStepQueues } from "./domain/workflow";
+export type { WorkflowClass } from "./domain/workflow";
 
 export { FAIR_ENQUEUE_SCRIPT } from "./persistence/redis/scripts";
 export {

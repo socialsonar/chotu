@@ -1,4 +1,4 @@
-import { defineWorkflow, next, parallel, Step, type NextStepsResult } from "chotu";
+import { defineWorkflow, next, parallel, Step, Workflow, type NextStepsResult } from "chotu";
 
 /** queries[] → 50 BQs/query → 20 urls/BQ → scrape → analyse */
 
@@ -244,18 +244,20 @@ class AggregateStressStep extends Step<WorkflowCompleteInput, StressOutput> {
     }
 }
 
-export const ScrapeStressWorkflow = defineWorkflow<ScrapeStressInput>({
-    name: "scrape-stress",
-    firstStep: PlannerStressStep,
-    steps: [
+class ScrapeStressWorkflowClass extends Workflow<ScrapeStressInput, StressOutput> {
+    readonly name = "scrape-stress";
+    readonly firstStep = PlannerStressStep;
+    readonly steps = [
         PlannerStressStep,
         FetchStressStep,
         ScrapeStressStep,
         AnalyseStressStep,
         AggregateStressStep,
-    ],
-    completeStep: AggregateStressStep,
-});
+    ];
+    readonly completeStep = AggregateStressStep;
+}
+
+export const ScrapeStressWorkflow = defineWorkflow(ScrapeStressWorkflowClass);
 
 export function stressBaseConfig() {
     return {

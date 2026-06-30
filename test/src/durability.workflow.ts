@@ -4,6 +4,7 @@ import {
     next,
     parallel,
     Step,
+    Workflow,
     type NextStepsResult,
     type StepHookContext,
 } from "chotu";
@@ -174,17 +175,19 @@ class SummaryDurabilityStep extends Step<WorkflowCompleteInput, DurabilityOutput
     }
 }
 
-export const DurabilityWorkflow = defineWorkflow<DurabilityInput>({
-    name: "durability",
-    firstStep: OrchestratorDurabilityStep,
-    steps: [
+class DurabilityWorkflowClass extends Workflow<DurabilityInput, DurabilityOutput> {
+    readonly name = "durability";
+    readonly firstStep = OrchestratorDurabilityStep;
+    readonly steps = [
         OrchestratorDurabilityStep,
         TaskDurabilityStep,
         JoinDurabilityStep,
         SummaryDurabilityStep,
-    ],
-    completeStep: SummaryDurabilityStep,
-});
+    ];
+    readonly completeStep = SummaryDurabilityStep;
+}
+
+export const DurabilityWorkflow = defineWorkflow(DurabilityWorkflowClass);
 
 export function durabilityBaseConfig() {
     return {
@@ -228,12 +231,14 @@ export class TimeoutProbeStep extends Step<{ v: number }, { v: number }> {
     }
 }
 
-export const TimeoutProbeWorkflow = defineWorkflow({
-    name: "durability-timeout-probe",
-    firstStep: TimeoutProbeStep,
-    steps: [TimeoutProbeStep],
-    terminalSteps: [TimeoutProbeStep],
-});
+class TimeoutProbeWorkflowClass extends Workflow<{ v: number }, { v: number }> {
+    readonly name = "durability-timeout-probe";
+    readonly firstStep = TimeoutProbeStep;
+    readonly steps = [TimeoutProbeStep];
+    readonly terminalSteps = [TimeoutProbeStep];
+}
+
+export const TimeoutProbeWorkflow = defineWorkflow(TimeoutProbeWorkflowClass);
 
 export function timeoutProbeConfig() {
     return {

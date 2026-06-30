@@ -5,7 +5,7 @@ import {
     DEFAULT_STEP_TIMEOUT_MS,
     resolveStepTimeoutMs,
 } from "../domain/timeout";
-import { validateConfig, type WorkflowDefinition } from "../domain/workflow";
+import { validateConfig, type Workflow } from "../domain/workflow";
 import type { QueueConfig } from "../interfaces/queue.interface";
 
 export interface StepRegistryOptions {
@@ -15,7 +15,7 @@ export interface StepRegistryOptions {
 
 export class StepRegistry {
     private readonly stepClasses = new Map<string, StepClass<any, any>>();
-    private readonly workflows = new Map<string, WorkflowDefinition>();
+    private readonly workflows = new Map<string, Workflow>();
     private readonly queues = new Map<string, QueueConfig>();
     readonly stepQueues: Record<string, string>;
     private readonly defaultStepTimeoutMs: number;
@@ -24,7 +24,7 @@ export class StepRegistry {
     constructor(
         queueConfigs: QueueConfig[],
         stepQueues: Record<string, string>,
-        workflowDefinitions: WorkflowDefinition[],
+        workflowDefinitions: Workflow[],
         options: StepRegistryOptions = {},
     ) {
         const defaultStepTimeoutMs = options.defaultStepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
@@ -55,7 +55,7 @@ export class StepRegistry {
         }
     }
 
-    getWorkflow(name: string): WorkflowDefinition | undefined {
+    getWorkflow(name: string): Workflow | undefined {
         return this.workflows.get(name);
     }
 

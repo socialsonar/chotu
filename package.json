@@ -1,6 +1,6 @@
 {
   "name": "@socialsonar/chotu",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/socialsonar/chotu.git"
@@ -9,13 +9,14 @@
     "registry": "https://npm.pkg.github.com"
   },
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "import": "./dist/index.cjs",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
     }
   },
   "files": [
@@ -24,13 +25,13 @@
   "scripts": {
     "test": "bun run --cwd test start",
     "test:dev": "bun run --cwd test dev",
-    "test:unit": "bun test --serial test/src/timeout-lease.test.ts test/src/multi-instance.test.ts test/src/step-timeout.test.ts test/src/hooks.test.ts test/src/abort-workflow.test.ts test/src/durability.test.ts test/src/hooks-stress.test.ts",
+    "test:unit": "bun test --cwd test --serial src/timeout-lease.test.ts src/multi-instance.test.ts src/step-timeout.test.ts src/hooks.test.ts src/workflow-hooks.test.ts src/abort-workflow.test.ts src/durability.test.ts src/hooks-stress.test.ts",
     "test:stress": "bun run --cwd test stress",
     "test:stress:quick": "bun run --cwd test stress:quick",
     "build": "npm run build:js && npm run build:types",
-    "build:js": "esbuild ./src/index.ts --outdir=./dist --platform=node --format=esm --packages=external",
+    "build:js": "esbuild ./src/index.ts --bundle --outfile=./dist/index.cjs --platform=node --format=cjs --packages=external",
     "build:types": "tsc --emitDeclarationOnly",
-    "build:watch:js": "esbuild ./src/index.ts --outdir=./dist --platform=node --format=esm --packages=external --watch",
+    "build:watch:js": "esbuild ./src/index.ts --bundle --outfile=./dist/index.cjs --platform=node --format=cjs --packages=external --watch",
     "build:watch:types": "tsc --emitDeclarationOnly --watch --preserveWatchOutput",
     "build:watch": "npm run build:watch:js & npm run build:watch:types; wait",
     "prepublishOnly": "npm run build"

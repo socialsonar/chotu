@@ -11,6 +11,7 @@ import {
     Step,
     stepKey,
     StepExecutionStatus,
+    Workflow,
     type StepHookContext,
     WorkflowRunStatus,
 } from "chotu";
@@ -62,12 +63,14 @@ class OnceStep extends Step<{ v: number }, { done: true }> {
     }
 }
 
-const onceWorkflow = defineWorkflow({
-    name: "once-test",
-    firstStep: OnceStep,
-    steps: [OnceStep],
-    terminalSteps: [OnceStep],
-});
+class OnceWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "once-test";
+    readonly firstStep = OnceStep;
+    readonly steps = [OnceStep];
+    readonly terminalSteps = [OnceStep];
+}
+
+const onceWorkflow = defineWorkflow(OnceWorkflow);
 
 class ThrowOnceStep extends Step<{ v: number }, { done: true }> {
     static stepName = "ThrowOnceStep";
@@ -93,12 +96,14 @@ class ThrowOnceStep extends Step<{ v: number }, { done: true }> {
     }
 }
 
-const throwOnceWorkflow = defineWorkflow({
-    name: "throw-once-test",
-    firstStep: ThrowOnceStep,
-    steps: [ThrowOnceStep],
-    terminalSteps: [ThrowOnceStep],
-});
+class ThrowOnceWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "throw-once-test";
+    readonly firstStep = ThrowOnceStep;
+    readonly steps = [ThrowOnceStep];
+    readonly terminalSteps = [ThrowOnceStep];
+}
+
+const throwOnceWorkflow = defineWorkflow(ThrowOnceWorkflow);
 
 describe.skipIf(!HAS_ENV)("multi-instance integration", () => {
     let redis: RedisClient;

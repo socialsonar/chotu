@@ -4,6 +4,7 @@ import {
     defineWorkflow,
     resetChotu,
     Step,
+    Workflow,
     StepExecutionStatus,
     WorkflowRunStatus,
 } from "chotu";
@@ -37,19 +38,22 @@ class FastStep extends Step<{ v: number }, { done: true }> {
     }
 }
 
-const slowWorkflow = defineWorkflow({
-    name: "slow-timeout-test",
-    firstStep: SlowStep,
-    steps: [SlowStep],
-    terminalSteps: [SlowStep],
-});
+class SlowTimeoutWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "slow-timeout-test";
+    readonly firstStep = SlowStep;
+    readonly steps = [SlowStep];
+    readonly terminalSteps = [SlowStep];
+}
 
-const fastWorkflow = defineWorkflow({
-    name: "fast-timeout-test",
-    firstStep: FastStep,
-    steps: [FastStep],
-    terminalSteps: [FastStep],
-});
+class FastTimeoutWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "fast-timeout-test";
+    readonly firstStep = FastStep;
+    readonly steps = [FastStep];
+    readonly terminalSteps = [FastStep];
+}
+
+const slowWorkflow = defineWorkflow(SlowTimeoutWorkflow);
+const fastWorkflow = defineWorkflow(FastTimeoutWorkflow);
 
 async function waitForStepStatus(
     chotu: ReturnType<typeof createChotu>,
@@ -169,12 +173,14 @@ describe.skipIf(!HAS_ENV)("step timeout", () => {
             }
         }
 
-        const defaultSlowWorkflow = defineWorkflow({
-            name: "default-slow-timeout-test",
-            firstStep: DefaultSlowStep,
-            steps: [DefaultSlowStep],
-            terminalSteps: [DefaultSlowStep],
-        });
+        class DefaultSlowTimeoutWorkflow extends Workflow<{ v: number }, { done: true }> {
+            readonly name = "default-slow-timeout-test";
+            readonly firstStep = DefaultSlowStep;
+            readonly steps = [DefaultSlowStep];
+            readonly terminalSteps = [DefaultSlowStep];
+        }
+
+        const defaultSlowWorkflow = defineWorkflow(DefaultSlowTimeoutWorkflow);
 
         resetChotu();
         const chotu = createChotu({

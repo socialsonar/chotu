@@ -4,14 +4,25 @@ Lightweight workflow orchestrator for Bun.
 
 ## Install
 
-```bash
-bun add chotu
+Published to GitHub Packages as `@socialsonar/chotu`.
+
+```ini
+# .npmrc (repo root or ~/.npmrc)
+@socialsonar:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
+
+```bash
+export GITHUB_TOKEN=<classic PAT with read:packages>
+bun add @socialsonar/chotu
+```
+
+Use a **classic** personal access token — fine-grained tokens do not support GitHub Packages.
 
 ## Usage
 
 ```ts
-import { createChotu, defineWorkflow, Step, next } from "chotu";
+import { createChotu, defineWorkflow, Step, next } from "@socialsonar/chotu";
 
 const chotu = createChotu({
   postgresUrl: process.env.POSTGRES_URL!,
@@ -119,6 +130,35 @@ const chotu = createChotu({
 ```
 
 Steps can read the cache via `workflowRunId` from `StepHookContext` in `onBeforeRun` / `onAfterRun` / `onError`.
+
+### Per-workflow hooks (`Workflow` class)
+
+Extend `Workflow` and pass the class to `defineWorkflow`. One instance is registered per workflow (singleton — keep hooks stateless or use external state keyed by `workflowRunId`).
+
+| Method | When | Error behavior |
+|--------|------|----------------|
+| `onBeforeStart` | Before Redis/Postgres writes in `runWorkflow()` | Propagates — run is not created |
+| `onAfterCompleted` | After workflow marked completed in Postgres, before global `onWorkflowCompleted` | Logged only |
+
+```ts
+class MyWorkflow extends Workflow<MyInput, MyOutput> {
+  readonly name = 'my-workflow';
+  readonly firstStep = FirstStep;
+  readonly steps = [FirstStep, LastStep];
+  readonly terminalSteps = [LastStep];
+
+  async onBeforeStart(input, ctx, signal) {
+    if (!input.id) throw new Error('id required');
+    return input; // optional: return transformed input
+  }
+
+  async onAfterCompleted(input, output, ctx, signal) {
+    // side effects after success
+  }
+}
+
+export const myWorkflow = defineWorkflow(MyWorkflow);
+```
 
 ### Queue options
 

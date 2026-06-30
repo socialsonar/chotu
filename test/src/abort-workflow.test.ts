@@ -4,6 +4,7 @@ import {
     defineWorkflow,
     resetChotu,
     Step,
+    Workflow,
     type ChotuHooks,
     StepExecutionStatus,
     WorkflowRunStatus,
@@ -50,26 +51,30 @@ class FailStep extends Step<{ v: number }, never> {
     }
 }
 
-const pendingWorkflow = defineWorkflow({
-    name: "abort-pending",
-    firstStep: PendingStep,
-    steps: [PendingStep],
-    terminalSteps: [PendingStep],
-});
+class PendingWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "abort-pending";
+    readonly firstStep = PendingStep;
+    readonly steps = [PendingStep];
+    readonly terminalSteps = [PendingStep];
+}
 
-const slowWorkflow = defineWorkflow({
-    name: "abort-slow",
-    firstStep: SlowStep,
-    steps: [SlowStep],
-    terminalSteps: [SlowStep],
-});
+class SlowWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "abort-slow";
+    readonly firstStep = SlowStep;
+    readonly steps = [SlowStep];
+    readonly terminalSteps = [SlowStep];
+}
 
-const failWorkflow = defineWorkflow({
-    name: "abort-fail",
-    firstStep: FailStep,
-    steps: [FailStep],
-    terminalSteps: [FailStep],
-});
+class FailWorkflow extends Workflow<{ v: number }, never> {
+    readonly name = "abort-fail";
+    readonly firstStep = FailStep;
+    readonly steps = [FailStep];
+    readonly terminalSteps = [FailStep];
+}
+
+const pendingWorkflow = defineWorkflow(PendingWorkflow);
+const slowWorkflow = defineWorkflow(SlowWorkflow);
+const failWorkflow = defineWorkflow(FailWorkflow);
 
 async function waitForRunStatus(
     chotu: ReturnType<typeof createChotu>,

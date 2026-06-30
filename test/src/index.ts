@@ -3,6 +3,7 @@ import {
     defineWorkflow,
     next,
     Step,
+    Workflow,
     WorkflowRunStatus,
     type NextStepsResult,
 } from "chotu";
@@ -33,12 +34,14 @@ class AsyncTargetStep extends Step<{ value: number }, { value: number }> {
     }
 }
 
-const AsyncWorkflow = defineWorkflow({
-    name: "async-route",
-    firstStep: AsyncRouteStep,
-    steps: [AsyncRouteStep, AsyncTargetStep],
-    terminalSteps: [AsyncTargetStep],
-});
+class AsyncWorkflowClass extends Workflow<{ value: number }, { value: number }> {
+    readonly name = "async-route";
+    readonly firstStep = AsyncRouteStep;
+    readonly steps = [AsyncRouteStep, AsyncTargetStep];
+    readonly terminalSteps = [AsyncTargetStep];
+}
+
+const AsyncWorkflow = defineWorkflow(AsyncWorkflowClass);
 
 const baseConfig = {
     postgresUrl: process.env.POSTGRES_URL!,

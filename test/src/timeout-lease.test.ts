@@ -7,6 +7,7 @@ import {
     resolveStepTimeoutMs,
     Step,
     StepRegistry,
+    Workflow,
 } from "chotu";
 
 class ShortStep extends Step<{ v: number }, { done: true }> {
@@ -34,12 +35,14 @@ class DefaultTimeoutStep extends Step<{ v: number }, { done: true }> {
     }
 }
 
-const workflow = defineWorkflow({
-    name: "timeout-lease-test",
-    firstStep: ShortStep,
-    steps: [ShortStep, DefaultTimeoutStep],
-    terminalSteps: [ShortStep, DefaultTimeoutStep],
-});
+class TimeoutLeaseWorkflow extends Workflow<{ v: number }, { done: true }> {
+    readonly name = "timeout-lease-test";
+    readonly firstStep = ShortStep;
+    readonly steps = [ShortStep, DefaultTimeoutStep];
+    readonly terminalSteps = [ShortStep, DefaultTimeoutStep];
+}
+
+const workflow = defineWorkflow(TimeoutLeaseWorkflow);
 
 describe("timeout / lease helpers", () => {
     test("resolveStepTimeoutMs uses override or default", () => {

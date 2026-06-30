@@ -1,4 +1,4 @@
-import { Step, isChotuStepError, next, parallel, defineWorkflow, type NextStepsResult } from "chotu";
+import { Step, isChotuStepError, next, parallel, defineWorkflow, Workflow, type NextStepsResult } from "chotu";
 
 // --- Types passed between steps ---
 
@@ -129,16 +129,19 @@ class FailStep extends Step<MonitorInput, never> {
 
 // --- Workflow definitions ---
 
-export const MonitorWorkflow = defineWorkflow<MonitorInput>({
-    name: "monitor",
-    firstStep: SearchStep,
-    steps: [SearchStep, GoogleFetchStep, BingFetchStep, AggregateStep],
-    terminalSteps: [AggregateStep],
-});
+class MonitorWorkflowClass extends Workflow<MonitorInput, FinalResult> {
+    readonly name = "monitor";
+    readonly firstStep = SearchStep;
+    readonly steps = [SearchStep, GoogleFetchStep, BingFetchStep, AggregateStep];
+    readonly terminalSteps = [AggregateStep];
+}
 
-export const FailWorkflow = defineWorkflow<MonitorInput>({
-    name: "fail",
-    firstStep: FailStep,
-    steps: [FailStep],
-    terminalSteps: [FailStep],
-});
+class FailWorkflowClass extends Workflow<MonitorInput, never> {
+    readonly name = "fail";
+    readonly firstStep = FailStep;
+    readonly steps = [FailStep];
+    readonly terminalSteps = [FailStep];
+}
+
+export const MonitorWorkflow = defineWorkflow(MonitorWorkflowClass);
+export const FailWorkflow = defineWorkflow(FailWorkflowClass);
