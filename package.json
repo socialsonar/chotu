@@ -34,6 +34,7 @@
     "build:watch:js": "esbuild ./src/index.ts --bundle --outfile=./dist/index.cjs --platform=node --format=cjs --packages=external --watch",
     "build:watch:types": "tsc --emitDeclarationOnly --watch --preserveWatchOutput",
     "build:watch": "npm run build:watch:js & npm run build:watch:types; wait",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
