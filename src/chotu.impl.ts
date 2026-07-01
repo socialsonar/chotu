@@ -4,6 +4,7 @@ import { ChotuHookRunner } from "./engine/hook-runner";
 import { StepRegistry } from "./engine/step-registry";
 import { WorkflowLifecycle } from "./engine/workflow-lifecycle";
 import { StepExecutor } from "./engine/step-executor";
+import { RunPurger } from "./engine/run-purger";
 import { RecoveryService } from "./engine/recovery.service";
 import { QueueWorkerPool } from "./engine/queue-worker";
 import { Chotu, ChotuConfig, ChotuHealth } from "./interfaces/chotu.interface";
@@ -57,6 +58,14 @@ export default class ChotuImpl implements Chotu {
             },
         );
         const hookRunner = new ChotuHookRunner(config.hooks, this.logger);
+        const runPurger = new RunPurger(
+            this.stateStore,
+            this.repository,
+            this.fairQueue,
+            registry,
+            this.logger,
+            config.purgeOnTerminal !== false,
+        );
         const lifecycle = new WorkflowLifecycle(
             this.stateStore,
             this.repository,
@@ -64,6 +73,7 @@ export default class ChotuImpl implements Chotu {
             registry,
             this.logger,
             hookRunner,
+            runPurger,
         );
         const stepExecutor = new StepExecutor(
             lifecycle,

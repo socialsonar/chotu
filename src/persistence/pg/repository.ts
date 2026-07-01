@@ -384,6 +384,13 @@ export class PgRepository implements IWorkflowRepository {
         );
     }
 
+    async deleteStepsForRun(workflowRunId: string): Promise<void> {
+        await this.sql`
+            DELETE FROM chotu.step_executions
+            WHERE workflow_run_id = ${workflowRunId}
+        `;
+    }
+
     private mapWorkflowRun(row: Record<string, unknown>): WorkflowRun {
         return {
             id: row.id as string,

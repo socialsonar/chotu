@@ -138,4 +138,19 @@ export class RedisFairQueue implements IFairQueue {
         }
         return false;
     }
+
+    async purgeRunFromQueues(
+        workflowRunId: string,
+        queueNames: Iterable<string>,
+        stepExecIds: string[],
+    ): Promise<void> {
+        for (const queueName of queueNames) {
+            await this.redis.send("DEL", [queueWfKey(queueName, workflowRunId)]);
+            await this.redis.send("LREM", [queueRotationKey(queueName), "0", workflowRunId]);
+            await this.redis.send("SREM", [queueWorkflowsKey(queueName), workflowRunId]);
+            for (const stepExecId of stepExecIds) {
+                await this.redis.send("LREM", [inflightKey(queueName), "0", stepExecId]);
+            }
+        }
+    }
 }

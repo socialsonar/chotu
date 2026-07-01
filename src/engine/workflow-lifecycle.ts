@@ -24,6 +24,7 @@ import {
 } from "../interfaces/workflow.interface";
 import type { ChotuLogger } from "../logger";
 import { sleep } from "../platform/sleep";
+import type { RunPurger } from "./run-purger";
 import { StepRegistry } from "./step-registry";
 
 const DEFAULT_BEFORE_START_TIMEOUT_MS = 30_000;
@@ -56,6 +57,7 @@ export class WorkflowLifecycle {
         private readonly registry: StepRegistry,
         private readonly logger: ChotuLogger,
         private readonly hookRunner: ChotuHookRunner,
+        private readonly runPurger: RunPurger,
     ) {}
 
     async runWorkflow<I>(name: string, input: I): Promise<{ id: string }> {
@@ -341,6 +343,8 @@ export class WorkflowLifecycle {
                 reason,
             });
         }
+
+        await this.runPurger.purgeTerminalRun(workflowRunId);
     }
 
     async scheduleNext(
@@ -505,6 +509,8 @@ export class WorkflowLifecycle {
                 reason,
             });
         }
+
+        await this.runPurger.purgeTerminalRun(workflowRunId);
     }
 
     async createStepExecution(params: {
@@ -708,6 +714,7 @@ export class WorkflowLifecycle {
                 input: runRow.input,
                 output,
             });
+            await this.runPurger.purgeTerminalRun(workflowRunId);
             return;
         } else if (
             completeRow.status === StepExecutionStatus.PENDING ||
@@ -791,6 +798,8 @@ export class WorkflowLifecycle {
                 output,
             });
         }
+
+        await this.runPurger.purgeTerminalRun(workflowRunId);
     }
 
     private async invokeWorkflowHook(

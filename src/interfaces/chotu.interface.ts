@@ -22,6 +22,8 @@ export interface ChotuConfig {
     defaultStepTimeoutMs?: number;
     /** Added above step timeout when computing execution lease (default: 30000). */
     leaseBufferMs?: number;
+    /** Purge Redis execution state and Postgres step rows when a workflow reaches a terminal state (default: true). */
+    purgeOnTerminal?: boolean;
     queues: QueueConfig[];
     stepQueues: Record<string, string>;
     workflows: Workflow[];

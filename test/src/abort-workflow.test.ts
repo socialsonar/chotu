@@ -122,7 +122,7 @@ describe.skipIf(!HAS_ENV)("abortWorkflow", () => {
         expect(run?.output).toEqual({ reason: "user abort" });
 
         const steps = await chotu.getStepExecutions(id);
-        expect(steps.every((s) => s.status === StepExecutionStatus.CANCELLED)).toBe(true);
+        expect(steps).toEqual([]);
 
         await chotu.shutdown();
         resetChotu();
@@ -150,7 +150,7 @@ describe.skipIf(!HAS_ENV)("abortWorkflow", () => {
         expect(run?.status).toBe(WorkflowRunStatus.CANCELLED);
 
         const steps = await chotu.getStepExecutions(id);
-        expect(steps.some((s) => s.status === StepExecutionStatus.CANCELLED)).toBe(true);
+        expect(steps).toEqual([]);
 
         await chotu.shutdown();
         resetChotu();

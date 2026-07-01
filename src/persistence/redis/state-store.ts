@@ -206,7 +206,29 @@ export class RedisStateStore implements IStateStore {
     }
 
     async rollbackRun(workflowRunId: string): Promise<void> {
-        await this.redis.send("DEL", [runKey(workflowRunId)]);
+        await this.purgeRunKeys(workflowRunId);
+    }
+
+    async purgeRun(
+        workflowRunId: string,
+        stepExecIds: string[],
+        joinBranchKeys: string[],
+    ): Promise<void> {
+        if (stepExecIds.length) {
+            await this.redis.send("DEL", stepExecIds.map((id) => stepKey(id)));
+        }
+        if (joinBranchKeys.length) {
+            await this.redis.send("DEL", joinBranchKeys);
+        }
+        await this.purgeRunKeys(workflowRunId);
+    }
+
+    private async purgeRunKeys(workflowRunId: string): Promise<void> {
+        await this.redis.send("DEL", [
+            runKey(workflowRunId),
+            runStepsKey(workflowRunId),
+            runLockKey(workflowRunId),
+        ]);
         const prefix = `chotu:run:${workflowRunId}:`;
         let cursor = "0";
         do {

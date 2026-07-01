@@ -23,6 +23,7 @@ export interface IStateStore {
     decrementJoinRemaining(joinStepId: string): Promise<number | null>;
     rollbackStep(stepExecId: string, workflowRunId: string, stepName: string): Promise<void>;
     rollbackRun(workflowRunId: string): Promise<void>;
+    purgeRun(workflowRunId: string, stepExecIds: string[], joinBranchKeys: string[]): Promise<void>;
     createRun(params: {
         id: string;
         workflowName: string;

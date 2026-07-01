@@ -15,4 +15,9 @@ export interface IFairQueue {
     acquireRateLimit(queue: QueueConfig): Promise<boolean>;
     rateLimitBackoffMs(queue: QueueConfig): number;
     isStepInAnyInflight(stepExecId: string, queueNames: Iterable<string>): Promise<boolean>;
+    purgeRunFromQueues(
+        workflowRunId: string,
+        queueNames: Iterable<string>,
+        stepExecIds: string[],
+    ): Promise<void>;
 }

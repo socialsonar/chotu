@@ -122,6 +122,7 @@ export class PgFlusher {
 
         if (ackIds.length) {
             await this.redis.send("XACK", [SYNC_STREAM, SYNC_CONSUMER_GROUP, ...ackIds]);
+            await this.redis.send("XTRIM", [SYNC_STREAM, "MAXLEN", "~", "10000"]);
         }
     }
 

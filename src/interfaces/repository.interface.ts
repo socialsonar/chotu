@@ -85,4 +85,5 @@ export interface IWorkflowRepository {
         workflowRunId: string,
         terminalNames: string[],
     ): Promise<{ step_name: string; output: Record<string, any> | null }[]>;
+    deleteStepsForRun(workflowRunId: string): Promise<void>;
 }

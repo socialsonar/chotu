@@ -55,12 +55,12 @@ Run **multiple Chotu processes** against the same Postgres and Redis URLs. Worke
 
 Chotu uses a **Redis execution layer** with **Postgres as the API source of truth**:
 
-- **Redis** — fair queues, inflight tracking, rate limits, claims, leases, join counters, completion CAS
-- **Postgres** — API reads (`getWorkflowRun`, `getStepExecutions`), durable audit, cold hydrate when Redis keys are missing
+- **Redis** — fair queues, inflight tracking, rate limits, claims, leases, join counters, completion CAS. **Purged automatically** when a workflow reaches `completed`, `failed`, or `cancelled` (configurable via `purgeOnTerminal`, default `true`).
+- **Postgres** — API reads (`getWorkflowRun`), durable audit. **Step rows are deleted on terminal**; the `workflow_runs` row is kept.
 
-**Consistency:** terminal step/workflow states sync to Postgres immediately (after a Redis CAS). Non-terminal updates (`running`, retry attempts) flush asynchronously via a Redis Stream outbox.
+**Consistency:** terminal step/workflow states sync to Postgres immediately (after a Redis CAS), then execution artifacts are purged. Non-terminal updates (`running`, retry attempts) flush asynchronously via a Redis Stream outbox.
 
-**API reads:** always from Postgres. In-flight status may lag Redis by up to `flushIntervalMs` (accepted tradeoff).
+**API reads:** always from Postgres. `getStepExecutions` is intended for **in-flight** runs; terminal runs return an empty list. In-flight status may lag Redis by up to `flushIntervalMs` (accepted tradeoff).
 
 Bun loads `.env` automatically — no `dotenv` needed.
 
@@ -74,6 +74,7 @@ Bun loads `.env` automatically — no `dotenv` needed.
 | `flushIntervalMs` | Async flush interval for non-terminal PG updates (default: 1000) |
 | `defaultStepTimeoutMs` | Default max step runtime in ms; every step is timed out (default: 60000) |
 | `leaseBufferMs` | Added above step timeout when computing execution lease (default: 30000) |
+| `purgeOnTerminal` | Delete Redis execution state and Postgres step rows when a workflow finishes (default: true) |
 | `queues` | Worker queue configs (concurrency per instance, retries, rate limits) |
 | `stepQueues` | Map step names to queue names |
 | `workflows` | Workflow definitions |

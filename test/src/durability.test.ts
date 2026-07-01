@@ -112,44 +112,10 @@ function countByName(steps: StepExecution[], name: string) {
     };
 }
 
-async function waitForDurabilitySteps(
-    chotu: ReturnType<typeof createChotu>,
-    runId: string,
-    timeoutMs = 30_000,
-): Promise<StepExecution[]> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        const steps = await chotu.getStepExecutions(runId);
-        const tasks = countByName(steps, "TaskDurabilityStep");
-        if (
-            tasks.total === TASK_COUNT &&
-            tasks.completed === TASK_COUNT - 1 &&
-            tasks.failed === 1 &&
-            tasks.active === 0
-        ) {
-            return steps;
-        }
-        await Bun.sleep(300);
-    }
-    return chotu.getStepExecutions(runId);
-}
-
-function assertDurabilityOutput(
-    output: DurabilityOutput | null | undefined,
-    steps: StepExecution[],
-): void {
+function assertDurabilityOutput(output: DurabilityOutput | null | undefined): void {
     expect(output?.totalTasks).toBe(TASK_COUNT);
     expect(output?.failedTasks).toBe(1);
     expect(output?.completedTasks).toBe(TASK_COUNT - 1);
-
-    expect(countByName(steps, "OrchestratorDurabilityStep").completed).toBeGreaterThanOrEqual(1);
-    expect(countByName(steps, "JoinDurabilityStep").completed).toBeGreaterThanOrEqual(1);
-    expect(countByName(steps, "SummaryDurabilityStep").completed).toBeGreaterThanOrEqual(1);
-
-    const tasks = countByName(steps, "TaskDurabilityStep");
-    expect(tasks.total).toBeGreaterThanOrEqual(TASK_COUNT - 1);
-    expect(tasks.completed + tasks.failed).toBeGreaterThanOrEqual(TASK_COUNT - 1);
-    expect(tasks.failed).toBeGreaterThanOrEqual(1);
 }
 
 async function spawnDurabilityWorkers(): Promise<Subprocess[]> {
@@ -244,10 +210,8 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
                 WorkflowRunStatus.COMPLETED,
                 120_000,
             );
-            assertDurabilityOutput(
-                run?.output as DurabilityOutput,
-                await waitForDurabilitySteps(submitter2, runId),
-            );
+            assertDurabilityOutput(run?.output as DurabilityOutput);
+            expect(await submitter2.getStepExecutions(runId)).toEqual([]);
 
             await submitter2.shutdown();
         },
@@ -278,10 +242,8 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
         await chotu2.startWorkers();
 
         const run = await waitForRunStatus(chotu2, runId, WorkflowRunStatus.COMPLETED, 90_000);
-        assertDurabilityOutput(
-            run?.output as DurabilityOutput,
-            await waitForDurabilitySteps(chotu2, runId),
-        );
+        assertDurabilityOutput(run?.output as DurabilityOutput);
+        expect(await chotu2.getStepExecutions(runId)).toEqual([]);
 
         await chotu2.shutdown();
     }, 120_000);
@@ -302,10 +264,8 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
         await chotu2.listen();
 
         const run = await waitForRunStatus(chotu2, runId, WorkflowRunStatus.COMPLETED, 90_000);
-        assertDurabilityOutput(
-            run?.output as DurabilityOutput,
-            await waitForDurabilitySteps(chotu2, runId),
-        );
+        assertDurabilityOutput(run?.output as DurabilityOutput);
+        expect(await chotu2.getStepExecutions(runId)).toEqual([]);
 
         await chotu2.shutdown();
     }, 120_000);
@@ -331,10 +291,8 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
         workers = await trackWorkers(await spawnDurabilityWorkers());
 
         const run = await waitForRunStatus(submitter, runId, WorkflowRunStatus.COMPLETED, 120_000);
-        assertDurabilityOutput(
-            run?.output as DurabilityOutput,
-            await waitForDurabilitySteps(submitter, runId),
-        );
+        assertDurabilityOutput(run?.output as DurabilityOutput);
+        expect(await submitter.getStepExecutions(runId)).toEqual([]);
 
         await submitter.shutdown();
     }, 180_000);
@@ -348,11 +306,7 @@ describe.skipIf(!HAS_ENV)("durability corner cases", () => {
 
         const run = await waitForRunStatus(chotu, runId, WorkflowRunStatus.COMPLETED, 30_000);
         expect(run?.status).toBe(WorkflowRunStatus.COMPLETED);
-
-        const step = (await chotu.getStepExecutions(runId)).find(
-            (s) => s.stepName === "TimeoutProbeStep",
-        );
-        expect(step?.status).toBe(StepExecutionStatus.COMPLETED);
+        expect(await chotu.getStepExecutions(runId)).toEqual([]);
 
         await chotu.shutdown();
     }, 60_000);
