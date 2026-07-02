@@ -164,6 +164,9 @@ var ChotuEngine = class {
   async recoverOrphanedPendingSteps() {
     return this.recovery.recoverOrphanedPendingSteps();
   }
+  async recoverAbortingRuns() {
+    return this.recovery.recoverAbortingRuns();
+  }
 };
 
 // src/engine/hook-runner.ts
@@ -1145,6 +1148,7 @@ var StepExecutor = class {
         await step.onAfterRun(input, output, ctx, stepSignal);
         const nextSteps = await step.getNextSteps(input, output, stepSignal);
         if (!await this.lifecycle.canScheduleForRun(row.workflow_run_id)) {
+          await this.lifecycle.cancelStep(stepExecId, row);
           return;
         }
         await this.lifecycle.completeStep(stepExecId, output);
@@ -1222,6 +1226,11 @@ var StepExecutor = class {
   async recoverFromWorkerError(stepExecId, row, queue) {
     const current = await this.lifecycle.loadStep(stepExecId);
     if (!current) return;
+    if (await this.lifecycle.isAbortRequested(row.workflow_run_id)) {
+      await this.fairQueue.cancelFromQueue(row.queue, stepExecId, row.workflow_run_id);
+      await this.lifecycle.cancelStep(stepExecId, current);
+      return;
+    }
     if (current.status === "running" /* RUNNING */) {
       await this.lifecycle.setStepStatus(stepExecId, "pending" /* PENDING */);
     }
@@ -1460,6 +1469,38 @@ var RecoveryService = class {
     }
     return enqueued;
   }
+  async recoverAbortingRuns() {
+    let recovered = 0;
+    const affectedRunIds = /* @__PURE__ */ new Set();
+    const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
+    for (const stepExecId of stepIds) {
+      const row = await this.lifecycle.loadStep(stepExecId);
+      if (!row) continue;
+      const workflowRunId = row.workflow_run_id;
+      if (!await this.stateStore.isAbortRequested(workflowRunId)) continue;
+      const runStatus = await this.stateStore.getRunStatus(workflowRunId);
+      if (runStatus !== "running" /* RUNNING */) continue;
+      affectedRunIds.add(workflowRunId);
+      if (row.status === "pending" /* PENDING */ || row.status === "waiting" /* WAITING */) {
+        await this.fairQueue.cancelFromQueue(row.queue, stepExecId, workflowRunId);
+        await this.lifecycle.cancelStep(stepExecId, row);
+        recovered++;
+        continue;
+      }
+      if (row.status === "running" /* RUNNING */ && row.lease_until <= Date.now()) {
+        await this.fairQueue.cancelFromQueue(row.queue, stepExecId, workflowRunId);
+        await this.lifecycle.cancelStep(stepExecId, row);
+        recovered++;
+      }
+    }
+    for (const runId of affectedRunIds) {
+      await this.lifecycle.finalizeCancelIfReady(runId);
+    }
+    if (recovered > 0) {
+      this.logger.info(`[chotu] Recovered ${recovered} step(s) on aborting run(s)`);
+    }
+    return recovered;
+  }
   async recoverStaleRunningSteps() {
     let recovered = 0;
     const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
@@ -1677,6 +1718,12 @@ var QueueWorkerPool = class {
         let inflightHandled = false;
         try {
           if (!await this.fairQueue.acquireRateLimit(queue)) {
+            if (await this.stateStore.isAbortRequested(claimed.workflow_run_id)) {
+              await this.stepExecutor.handleAbortedStep(claimed);
+              await this.fairQueue.ack(queue.name, stepExecId);
+              inflightHandled = true;
+              continue;
+            }
             if (!await this.stepExecutor.setStepStatus(
               stepExecId,
               "pending" /* PENDING */
@@ -1753,6 +1800,9 @@ var QueueWorkerPool = class {
   }
   async runLeaderRecovery() {
     const steps = [
+      async () => {
+        await this.recovery.recoverAbortingRuns();
+      },
       async () => {
         await this.recovery.recoverInflightSteps();
       },
@@ -3735,6 +3785,10 @@ var ChotuImpl = class {
   async abortWorkflow(workflowRunId, reason) {
     this.assertStarted();
     return this.engine.abortWorkflow(workflowRunId, reason);
+  }
+  async recoverAbortingRuns() {
+    this.assertStarted();
+    return this.engine.recoverAbortingRuns();
   }
   async health() {
     let postgres = false;

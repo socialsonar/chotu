@@ -17,6 +17,7 @@ export declare class RecoveryService {
     constructor(stateStore: IStateStore, repository: IWorkflowRepository, fairQueue: IFairQueue, lifecycle: WorkflowLifecycle, registry: StepRegistry, logger: ChotuLogger, redis: ChotuRedis, instanceId: string);
     recoverOnStartup(): Promise<number>;
     coldStartupReconcile(isLeader: boolean): Promise<number>;
+    recoverAbortingRuns(): Promise<number>;
     recoverStaleRunningSteps(): Promise<number>;
     recoverInflightSteps(): Promise<number>;
     recoverOrphanedPendingSteps(): Promise<number>;

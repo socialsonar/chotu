@@ -29,6 +29,7 @@ export default class ChotuImpl implements Chotu {
     getWorkflowRun(id: string): Promise<WorkflowRun | null>;
     getStepExecutions(workflowRunId: string): Promise<StepExecution[]>;
     abortWorkflow(workflowRunId: string, reason?: string): Promise<boolean>;
+    recoverAbortingRuns(): Promise<number>;
     health(): Promise<ChotuHealth>;
 }
 //# sourceMappingURL=chotu.impl.d.ts.map

@@ -192,6 +192,11 @@ export default class ChotuImpl implements Chotu {
         return this.engine.abortWorkflow(workflowRunId, reason);
     }
 
+    async recoverAbortingRuns(): Promise<number> {
+        this.assertStarted();
+        return this.engine.recoverAbortingRuns();
+    }
+
     async health(): Promise<ChotuHealth> {
         let postgres = false;
         let redis = false;

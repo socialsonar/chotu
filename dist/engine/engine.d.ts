@@ -25,5 +25,6 @@ export declare class ChotuEngine {
     recoverStaleRunningSteps(): Promise<number>;
     recoverInflightSteps(): Promise<number>;
     recoverOrphanedPendingSteps(): Promise<number>;
+    recoverAbortingRuns(): Promise<number>;
 }
 //# sourceMappingURL=engine.d.ts.map

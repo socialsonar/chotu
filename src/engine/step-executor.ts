@@ -72,6 +72,7 @@ export class StepExecutor {
                 const nextSteps = await step.getNextSteps(input, output, stepSignal);
 
                 if (!(await this.lifecycle.canScheduleForRun(row.workflow_run_id))) {
+                    await this.lifecycle.cancelStep(stepExecId, row);
                     return;
                 }
 
@@ -162,6 +163,12 @@ export class StepExecutor {
     ): Promise<void> {
         const current = await this.lifecycle.loadStep(stepExecId);
         if (!current) return;
+
+        if (await this.lifecycle.isAbortRequested(row.workflow_run_id)) {
+            await this.fairQueue.cancelFromQueue(row.queue, stepExecId, row.workflow_run_id);
+            await this.lifecycle.cancelStep(stepExecId, current);
+            return;
+        }
 
         if (current.status === StepExecutionStatus.RUNNING) {
             await this.lifecycle.setStepStatus(stepExecId, StepExecutionStatus.PENDING);

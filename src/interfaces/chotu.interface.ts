@@ -41,6 +41,7 @@ export interface Chotu {
     getStepExecutions(workflowRunId: string): Promise<StepExecution[]>;
     health(): Promise<ChotuHealth>;
     abortWorkflow(workflowRunId: string, reason?: string): Promise<boolean>;
+    recoverAbortingRuns(): Promise<number>;
     isStarted(): boolean;
     areWorkersStarted(): boolean;
 }

@@ -76,4 +76,8 @@ export class ChotuEngine {
     async recoverOrphanedPendingSteps(): Promise<number> {
         return this.recovery.recoverOrphanedPendingSteps();
     }
+
+    async recoverAbortingRuns(): Promise<number> {
+        return this.recovery.recoverAbortingRuns();
+    }
 }

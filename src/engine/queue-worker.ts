@@ -130,6 +130,12 @@ export class QueueWorkerPool {
                 let inflightHandled = false;
                 try {
                     if (!(await this.fairQueue.acquireRateLimit(queue))) {
+                        if (await this.stateStore.isAbortRequested(claimed.workflow_run_id)) {
+                            await this.stepExecutor.handleAbortedStep(claimed);
+                            await this.fairQueue.ack(queue.name, stepExecId);
+                            inflightHandled = true;
+                            continue;
+                        }
                         if (
                             !(await this.stepExecutor.setStepStatus(
                                 stepExecId,
@@ -213,6 +219,9 @@ export class QueueWorkerPool {
 
     private async runLeaderRecovery(): Promise<void> {
         const steps: Array<() => Promise<void>> = [
+            async () => {
+                await this.recovery.recoverAbortingRuns();
+            },
             async () => {
                 await this.recovery.recoverInflightSteps();
             },

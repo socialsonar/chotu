@@ -82,6 +82,51 @@ export class RecoveryService {
         return enqueued;
     }
 
+    async recoverAbortingRuns(): Promise<number> {
+        let recovered = 0;
+        const affectedRunIds = new Set<string>();
+        const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
+
+        for (const stepExecId of stepIds) {
+            const row = await this.lifecycle.loadStep(stepExecId);
+            if (!row) continue;
+
+            const workflowRunId = row.workflow_run_id;
+            if (!(await this.stateStore.isAbortRequested(workflowRunId))) continue;
+
+            const runStatus = await this.stateStore.getRunStatus(workflowRunId);
+            if (runStatus !== WorkflowRunStatus.RUNNING) continue;
+
+            affectedRunIds.add(workflowRunId);
+
+            if (
+                row.status === StepExecutionStatus.PENDING ||
+                row.status === StepExecutionStatus.WAITING
+            ) {
+                await this.fairQueue.cancelFromQueue(row.queue, stepExecId, workflowRunId);
+                await this.lifecycle.cancelStep(stepExecId, row);
+                recovered++;
+                continue;
+            }
+
+            if (row.status === StepExecutionStatus.RUNNING && row.lease_until <= Date.now()) {
+                await this.fairQueue.cancelFromQueue(row.queue, stepExecId, workflowRunId);
+                await this.lifecycle.cancelStep(stepExecId, row);
+                recovered++;
+            }
+        }
+
+        for (const runId of affectedRunIds) {
+            await this.lifecycle.finalizeCancelIfReady(runId);
+        }
+
+        if (recovered > 0) {
+            this.logger.info(`[chotu] Recovered ${recovered} step(s) on aborting run(s)`);
+        }
+
+        return recovered;
+    }
+
     async recoverStaleRunningSteps(): Promise<number> {
         let recovered = 0;
         const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
