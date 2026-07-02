@@ -1,0 +1,1 @@
+{"version":3,"file":"sql.js","sourceRoot":"","sources":["../../src/platform/sql.ts"],"names":[],"mappings":"AAAA,OAAO,QAAQ,MAAM,UAAU,CAAC;AAIhC,MAAM,UAAU,SAAS,CACrB,GAAW,EACX,UAA4B,EAAE;IAE9B,OAAO,QAAQ,CAAC,GAAG,EAAE;QACjB,GAAG,EAAE,OAAO,CAAC,GAAG,IAAI,EAAE;KACzB,CAAC,CAAC;AACP,CAAC"}

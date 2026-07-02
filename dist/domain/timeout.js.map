@@ -1,0 +1,1 @@
+{"version":3,"file":"timeout.js","sourceRoot":"","sources":["../../src/domain/timeout.ts"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,uBAAuB,GAAG,MAAM,CAAC;AAC9C,MAAM,CAAC,MAAM,uBAAuB,GAAG,MAAM,CAAC;AAE9C,MAAM,UAAU,iBAAiB,CAAC,aAAqB,EAAE,aAAqB;IAC1E,OAAO,aAAa,GAAG,aAAa,CAAC;AACzC,CAAC;AAED,MAAM,UAAU,oBAAoB,CAChC,aAAiC,EACjC,oBAA4B;IAE5B,OAAO,aAAa,IAAI,oBAAoB,CAAC;AACjD,CAAC"}

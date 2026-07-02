@@ -1,6 +1,5 @@
 node_modules/
 examples/.env
-dist/
 *.code-workspace
 .cursor/
 .env

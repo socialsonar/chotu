@@ -1,0 +1,60 @@
+import { type NextStep, type ParallelSpec } from "../domain/step";
+import type { IFairQueue } from "../interfaces/fair-queue.interface";
+import type { ChotuHookRunner } from "./hook-runner";
+import type { IWorkflowRepository } from "../interfaces/repository.interface";
+import type { IStateStore } from "../interfaces/state-store.interface";
+import { StepExecutionStatus, type StepExecution, type StepExecutionRecord, type WorkflowRun, type WorkflowRunRecord } from "../interfaces/workflow.interface";
+import type { ChotuLogger } from "../logger";
+import type { RunPurger } from "./run-purger";
+import { StepRegistry } from "./step-registry";
+export declare class WorkflowLifecycle {
+    private readonly stateStore;
+    private readonly repository;
+    private readonly fairQueue;
+    private readonly registry;
+    private readonly logger;
+    private readonly hookRunner;
+    private readonly runPurger;
+    constructor(stateStore: IStateStore, repository: IWorkflowRepository, fairQueue: IFairQueue, registry: StepRegistry, logger: ChotuLogger, hookRunner: ChotuHookRunner, runPurger: RunPurger);
+    runWorkflow<I>(name: string, input: I): Promise<{
+        id: string;
+    }>;
+    getWorkflowRun(id: string): Promise<WorkflowRun | null>;
+    getStepExecutions(workflowRunId: string): Promise<StepExecution[]>;
+    loadStep(stepExecId: string): Promise<StepExecutionRecord | null>;
+    loadRun(workflowRunId: string): Promise<WorkflowRunRecord | null>;
+    setStepStatus(stepExecId: string, status: StepExecutionStatus): Promise<boolean>;
+    incrementAttempts(stepExecId: string): Promise<number>;
+    completeStep(stepExecId: string, output: Record<string, any>): Promise<void>;
+    failStep(stepExecId: string, row: StepExecutionRecord, error: Error): Promise<void>;
+    cancelStep(stepExecId: string, row: StepExecutionRecord, reason?: string): Promise<void>;
+    isAbortRequested(workflowRunId: string): Promise<boolean>;
+    canScheduleForRun(workflowRunId: string): Promise<boolean>;
+    beginCancelWorkflow(workflowRunId: string, reason?: string): Promise<boolean>;
+    finalizeCancelIfReady(workflowRunId: string, reason?: string): Promise<boolean>;
+    private finalizeCancelledRun;
+    scheduleNext(nextSteps: "END" | NextStep<any> | ParallelSpec, workflowRunId: string, currentStepExecId: string, stepOutput?: Record<string, any>): Promise<void>;
+    checkCompletion(workflowRunId: string): Promise<void>;
+    enqueueStep(stepExecId: string, stepName: string, workflowRunId: string): Promise<void>;
+    decrementJoinRemaining(joinStepId: string, workflowRunId: string): Promise<void>;
+    finalizeJoin(joinStepId: string, workflowRunId: string): Promise<void>;
+    failWorkflowRun(workflowRunId: string, reason?: string): Promise<void>;
+    createStepExecution(params: {
+        workflowRunId: string;
+        stepName: string;
+        queue: string;
+        input: Record<string, any> | null;
+        status?: StepExecutionStatus;
+        joinStepId?: string | null;
+        fanOutIndex?: number | null;
+        joinTotal?: number | null;
+        joinRemaining?: number | null;
+    }): Promise<string>;
+    private completeBranch;
+    private spawnParallel;
+    private doCheckCompletion;
+    private handleCompleteStep;
+    private completeWorkflowWithoutCompleteStep;
+    private invokeWorkflowHook;
+}
+//# sourceMappingURL=workflow-lifecycle.d.ts.map

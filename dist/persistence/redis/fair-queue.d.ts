@@ -1,0 +1,18 @@
+import type { ChotuRedis } from "../../platform";
+import type { IFairQueue } from "../../interfaces/fair-queue.interface";
+import type { QueueConfig } from "../../interfaces/queue.interface";
+export declare class RedisFairQueue implements IFairQueue {
+    private readonly redis;
+    constructor(redis: ChotuRedis);
+    pop(queueName: string): Promise<string | null>;
+    ack(queueName: string, stepExecId: string): Promise<void>;
+    requeue(queueName: string, stepExecId: string, workflowRunId: string): Promise<void>;
+    enqueue(stepExecId: string, queueName: string, workflowRunId: string): Promise<void>;
+    enqueueWithRetry(stepExecId: string, queueName: string, workflowRunId: string, maxAttempts?: number): Promise<void>;
+    cancelFromQueue(queueName: string, stepExecId: string, workflowRunId: string): Promise<void>;
+    acquireRateLimit(queue: QueueConfig): Promise<boolean>;
+    rateLimitBackoffMs(queue: QueueConfig): number;
+    isStepInAnyInflight(stepExecId: string, queueNames: Iterable<string>): Promise<boolean>;
+    purgeRunFromQueues(workflowRunId: string, queueNames: Iterable<string>, stepExecIds: string[]): Promise<void>;
+}
+//# sourceMappingURL=fair-queue.d.ts.map
