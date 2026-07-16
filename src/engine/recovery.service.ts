@@ -262,6 +262,42 @@ export class RecoveryService {
         }
     }
 
+    /**
+     * Safety net for the checkCompletion lock race: a run can be left
+     * status=running with active_count=0 if the last terminal transition's
+     * completion check lost the run lock and gave up. Re-drive completion.
+     */
+    async recoverIdleRunningRuns(): Promise<number> {
+        const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
+        const runIds = new Set<string>();
+
+        for (const stepExecId of stepIds) {
+            const row = await this.lifecycle.loadStep(stepExecId);
+            if (row) runIds.add(row.workflow_run_id);
+        }
+
+        let recovered = 0;
+        for (const runId of runIds) {
+            const status = await this.stateStore.getRunStatus(runId);
+            if (status !== WorkflowRunStatus.RUNNING) continue;
+
+            const activeCount = await this.stateStore.recomputeRunActiveCount(runId);
+            if (activeCount > 0) continue;
+
+            await this.lifecycle.checkCompletion(runId);
+            const after = await this.stateStore.getRunStatus(runId);
+            if (after !== WorkflowRunStatus.RUNNING) {
+                recovered++;
+            }
+        }
+
+        if (recovered > 0) {
+            this.logger.info(`[chotu] Recovered ${recovered} idle running workflow(s)`);
+        }
+
+        return recovered;
+    }
+
     async reEnqueueIfPending(
         stepExecId: string,
         queueName: string,

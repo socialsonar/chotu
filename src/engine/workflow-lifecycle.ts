@@ -28,6 +28,9 @@ import type { RunPurger } from "./run-purger";
 import { StepRegistry } from "./step-registry";
 
 const DEFAULT_BEFORE_START_TIMEOUT_MS = 30_000;
+const CHECK_COMPLETION_LOCK_TTL_SEC = 30;
+const CHECK_COMPLETION_LOCK_RETRY_MS = 25;
+const CHECK_COMPLETION_LOCK_WAIT_MS = (CHECK_COMPLETION_LOCK_TTL_SEC + 5) * 1000;
 
 async function syncWithRetry(
     fn: () => Promise<void>,
@@ -385,15 +388,31 @@ export class WorkflowLifecycle {
     }
 
     async checkCompletion(workflowRunId: string): Promise<void> {
-        const lockToken = crypto.randomUUID();
-        const acquired = await this.stateStore.acquireRunLock(workflowRunId, lockToken, 30);
-        if (!acquired) return;
+        const deadline = Date.now() + CHECK_COMPLETION_LOCK_WAIT_MS;
 
-        try {
-            await this.doCheckCompletion(workflowRunId);
-        } finally {
-            await this.stateStore.releaseRunLock(workflowRunId, lockToken);
+        while (Date.now() < deadline) {
+            const lockToken = crypto.randomUUID();
+            const acquired = await this.stateStore.acquireRunLock(
+                workflowRunId,
+                lockToken,
+                CHECK_COMPLETION_LOCK_TTL_SEC,
+            );
+            if (!acquired) {
+                await sleep(CHECK_COMPLETION_LOCK_RETRY_MS);
+                continue;
+            }
+
+            try {
+                await this.doCheckCompletion(workflowRunId);
+                return;
+            } finally {
+                await this.stateStore.releaseRunLock(workflowRunId, lockToken);
+            }
         }
+
+        this.logger.warn(
+            `[chotu] checkCompletion timed out waiting for run lock ${workflowRunId}`,
+        );
     }
 
     async enqueueStep(
@@ -443,7 +462,18 @@ export class WorkflowLifecycle {
 
         const branches = await this.stateStore.getJoinBranches(joinStepId);
 
-        const outputs: Record<string, any>[] = branches.map((branch) => {
+        // Multi-step branches RPUSH every step onto the join list. Keep the latest
+        // step per fan_out_index so the join receives one terminal output per branch.
+        const terminalByFanOut = new Map<number, (typeof branches)[number]>();
+        for (const branch of branches) {
+            const index = branch.fan_out_index ?? -1;
+            terminalByFanOut.set(index, branch);
+        }
+        const terminalBranches = [...terminalByFanOut.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([, branch]) => branch);
+
+        const outputs: Record<string, any>[] = terminalBranches.map((branch) => {
             if (branch.status === StepExecutionStatus.FAILED) {
                 const branchError = branch.error as { message?: string } | null;
                 return createStepError(

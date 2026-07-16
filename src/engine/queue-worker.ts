@@ -232,6 +232,9 @@ export class QueueWorkerPool {
                 await this.recovery.recoverOrphanedPendingSteps();
             },
             () => this.recovery.rebuildJoinStateFromRedis(),
+            async () => {
+                await this.recovery.recoverIdleRunningRuns();
+            },
         ];
 
         for (const step of steps) {

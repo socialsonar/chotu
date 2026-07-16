@@ -3,3 +3,4 @@ examples/.env
 *.code-workspace
 .cursor/
 .env
+mcp.json

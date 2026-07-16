@@ -22,6 +22,12 @@ export declare class RecoveryService {
     recoverInflightSteps(): Promise<number>;
     recoverOrphanedPendingSteps(): Promise<number>;
     rebuildJoinStateFromRedis(): Promise<void>;
+    /**
+     * Safety net for the checkCompletion lock race: a run can be left
+     * status=running with active_count=0 if the last terminal transition's
+     * completion check lost the run lock and gave up. Re-drive completion.
+     */
+    recoverIdleRunningRuns(): Promise<number>;
     reEnqueueIfPending(stepExecId: string, queueName: string, workflowRunId: string): Promise<boolean>;
     private shouldSkipRun;
 }

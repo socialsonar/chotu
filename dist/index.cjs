@@ -55,6 +55,8 @@ __export(index_exports, {
   queueWorkflowsKey: () => queueWorkflowsKey,
   resetChotu: () => resetChotu,
   resolveStepTimeoutMs: () => resolveStepTimeoutMs,
+  runKey: () => runKey,
+  runLockKey: () => runLockKey,
   stepKey: () => stepKey,
   validateConfig: () => validateConfig,
   validateStepQueues: () => validateStepQueues
@@ -468,6 +470,9 @@ var StepExecutionStatus = /* @__PURE__ */ ((StepExecutionStatus2) => {
 
 // src/engine/workflow-lifecycle.ts
 var DEFAULT_BEFORE_START_TIMEOUT_MS = 3e4;
+var CHECK_COMPLETION_LOCK_TTL_SEC = 30;
+var CHECK_COMPLETION_LOCK_RETRY_MS = 25;
+var CHECK_COMPLETION_LOCK_WAIT_MS = (CHECK_COMPLETION_LOCK_TTL_SEC + 5) * 1e3;
 async function syncWithRetry(fn, label, logger, maxAttempts = 3) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -750,14 +755,28 @@ var WorkflowLifecycle = class {
     }
   }
   async checkCompletion(workflowRunId) {
-    const lockToken = crypto.randomUUID();
-    const acquired = await this.stateStore.acquireRunLock(workflowRunId, lockToken, 30);
-    if (!acquired) return;
-    try {
-      await this.doCheckCompletion(workflowRunId);
-    } finally {
-      await this.stateStore.releaseRunLock(workflowRunId, lockToken);
+    const deadline = Date.now() + CHECK_COMPLETION_LOCK_WAIT_MS;
+    while (Date.now() < deadline) {
+      const lockToken = crypto.randomUUID();
+      const acquired = await this.stateStore.acquireRunLock(
+        workflowRunId,
+        lockToken,
+        CHECK_COMPLETION_LOCK_TTL_SEC
+      );
+      if (!acquired) {
+        await sleep(CHECK_COMPLETION_LOCK_RETRY_MS);
+        continue;
+      }
+      try {
+        await this.doCheckCompletion(workflowRunId);
+        return;
+      } finally {
+        await this.stateStore.releaseRunLock(workflowRunId, lockToken);
+      }
     }
+    this.logger.warn(
+      `[chotu] checkCompletion timed out waiting for run lock ${workflowRunId}`
+    );
   }
   async enqueueStep(stepExecId, stepName, workflowRunId) {
     if (!await this.canScheduleForRun(workflowRunId)) return;
@@ -792,7 +811,13 @@ var WorkflowLifecycle = class {
       return;
     }
     const branches = await this.stateStore.getJoinBranches(joinStepId);
-    const outputs = branches.map((branch) => {
+    const terminalByFanOut = /* @__PURE__ */ new Map();
+    for (const branch of branches) {
+      const index = branch.fan_out_index ?? -1;
+      terminalByFanOut.set(index, branch);
+    }
+    const terminalBranches = [...terminalByFanOut.entries()].sort(([a], [b]) => a - b).map(([, branch]) => branch);
+    const outputs = terminalBranches.map((branch) => {
       if (branch.status === "failed" /* FAILED */) {
         const branchError = branch.error;
         return createStepError(
@@ -1602,6 +1627,35 @@ var RecoveryService = class {
       await this.stateStore.recomputeRunActiveCount(runId);
     }
   }
+  /**
+   * Safety net for the checkCompletion lock race: a run can be left
+   * status=running with active_count=0 if the last terminal transition's
+   * completion check lost the run lock and gave up. Re-drive completion.
+   */
+  async recoverIdleRunningRuns() {
+    const stepIds = await this.stateStore.scanStepIds("chotu:step:*");
+    const runIds = /* @__PURE__ */ new Set();
+    for (const stepExecId of stepIds) {
+      const row = await this.lifecycle.loadStep(stepExecId);
+      if (row) runIds.add(row.workflow_run_id);
+    }
+    let recovered = 0;
+    for (const runId of runIds) {
+      const status = await this.stateStore.getRunStatus(runId);
+      if (status !== "running" /* RUNNING */) continue;
+      const activeCount = await this.stateStore.recomputeRunActiveCount(runId);
+      if (activeCount > 0) continue;
+      await this.lifecycle.checkCompletion(runId);
+      const after = await this.stateStore.getRunStatus(runId);
+      if (after !== "running" /* RUNNING */) {
+        recovered++;
+      }
+    }
+    if (recovered > 0) {
+      this.logger.info(`[chotu] Recovered ${recovered} idle running workflow(s)`);
+    }
+    return recovered;
+  }
   async reEnqueueIfPending(stepExecId, queueName, workflowRunId) {
     if (await this.shouldSkipRun(workflowRunId)) return false;
     const step = await this.lifecycle.loadStep(stepExecId);
@@ -1812,7 +1866,10 @@ var QueueWorkerPool = class {
       async () => {
         await this.recovery.recoverOrphanedPendingSteps();
       },
-      () => this.recovery.rebuildJoinStateFromRedis()
+      () => this.recovery.rebuildJoinStateFromRedis(),
+      async () => {
+        await this.recovery.recoverIdleRunningRuns();
+      }
     ];
     for (const step of steps) {
       if (!await this.stateStore.tryAcquireRecoveryLeader(this.instanceId)) {
@@ -3859,6 +3916,8 @@ function getChotu() {
   queueWorkflowsKey,
   resetChotu,
   resolveStepTimeoutMs,
+  runKey,
+  runLockKey,
   stepKey,
   validateConfig,
   validateStepQueues

@@ -13,7 +13,7 @@ export { computeLeaseTtlMs, DEFAULT_LEASE_BUFFER_MS, DEFAULT_STEP_TIMEOUT_MS, re
 export { Workflow, defineWorkflow, validateConfig, validateStepQueues } from "./domain/workflow";
 export type { WorkflowClass } from "./domain/workflow";
 export { FAIR_ENQUEUE_SCRIPT } from "./persistence/redis/scripts";
-export { queueRotationKey, queueWfKey, queueWorkflowsKey, stepKey, inflightKey, } from "./persistence/redis/keys";
+export { queueRotationKey, queueWfKey, queueWorkflowsKey, runKey, runLockKey, stepKey, inflightKey, } from "./persistence/redis/keys";
 export declare function resetChotu(): void;
 export declare function createChotu(config: ChotuConfig): Chotu;
 export declare function getChotu(): Chotu | undefined;

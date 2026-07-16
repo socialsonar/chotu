@@ -61,6 +61,8 @@ export {
     queueRotationKey,
     queueWfKey,
     queueWorkflowsKey,
+    runKey,
+    runLockKey,
     stepKey,
     inflightKey,
 } from "./persistence/redis/keys";
